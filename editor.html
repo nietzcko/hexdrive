@@ -1,1 +1,388 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Hex Racer – Pályaszerkesztő</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #111; color: #eee; font-family: sans-serif;
+      display: flex; flex-direction: column; height: 100dvh; overflow: hidden;
+      touch-action: none; overscroll-behavior: none;
+    }
+    #viewport { flex: 1; position: relative; overflow: hidden; min-height: 0; }
+    canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+    #ui {
+      flex-shrink: 0;
+      background: #1a1a22; border-top: 2px solid #334;
+      padding: 10px 10px 20px 10px; display: flex; flex-direction: column; gap: 8px;
+    }
+    .row { display: flex; gap: 6px; }
+    button {
+      flex: 1; min-height: 46px; background: #2a2a38; border: 1.5px solid #445;
+      color: #ddd; border-radius: 8px; font-size: 14px; font-weight: 600;
+      touch-action: manipulation; cursor: pointer;
+    }
+    button:active { background: #3a3a50; transform: scale(0.97); }
+    button.active { background: #1a5c3a; border-color: #2ebd6e; color: #7fffa0; }
+    button.danger { background: #5c1a1a; border-color: #bd2e2e; color: #ffa07a; }
+    button.finish { background: #5c4500; border-color: #c8870a; color: #ffd070; }
+    #output {
+      width: 100%; height: 56px; background: #0a0a12; color: #4fffb0;
+      border: 1.5px solid #334; border-radius: 6px; padding: 7px 8px;
+      font-family: monospace; font-size: 11px; resize: none;
+    }
+    .hint {
+      position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.6); color: #888; font-size: 12px;
+      padding: 4px 12px; border-radius: 20px; pointer-events: none;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
 
+<div id="viewport">
+  <canvas id="c"></canvas>
+  <div class="hint" id="hint">Koppints a zöld gömbre a pálya folytatásához</div>
+</div>
+
+<div id="ui">
+  <div class="row">
+    <button onclick="setModifier(null)" id="btnNorm" class="active">🛣 Normal</button>
+    <button onclick="setModifier('N')" id="btnNarr">⚠️ Narrow</button>
+    <button onclick="setFinish()" class="finish">🏁 Finish</button>
+  </div>
+  <div class="row">
+    <button onclick="undo()">↩️ Undo</button>
+    <button onclick="clearTrack()" class="danger">🗑️ Törlés</button>
+    <button onclick="copyCode()">📋 Másolás</button>
+  </div>
+  <textarea id="output" readonly></textarea>
+</div>
+
+<script>
+const cvs = document.getElementById('c');
+const ctx  = cvs.getContext('2d');
+
+// ── Constants ────────────────────────────────────────────────────────────────
+const R       = 48;                          // hex circumradius
+const APOTHEM = R * Math.sqrt(3) / 2;        // flat-to-flat / 2
+
+// ── State ────────────────────────────────────────────────────────────────────
+let SEQ = [[3, 0, 'S']];
+let panX = 0, panY = 0;
+let zoom = 1;
+let mouseWX = 0, mouseWY = 0;               // world-space mouse pos
+
+// ── Resize ───────────────────────────────────────────────────────────────────
+function resize() {
+  const vp  = document.getElementById('viewport');
+  const dpr = window.devicePixelRatio || 1;
+  const w   = vp.clientWidth;
+  const h   = vp.clientHeight;
+  cvs.width  = Math.round(w * dpr);
+  cvs.height = Math.round(h * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);  // scale once; all drawing in CSS px
+  render();
+}
+new ResizeObserver(resize).observe(document.getElementById('viewport'));
+
+// ── Coordinate helpers ───────────────────────────────────────────────────────
+// clientXY → world XY (accounts for pan/zoom, works at any DPR)
+function clientToWorld(cx, cy) {
+  const rect = cvs.getBoundingClientRect();
+  return {
+    x: (cx - rect.left - panX) / zoom,
+    y: (cy - rect.top  - panY) / zoom
+  };
+}
+
+// ── Hex math (matches main game exactly) ─────────────────────────────────────
+function edgeAngle(e) { return Math.PI / 3 * e + Math.PI / 6; }
+
+function edgeMid(cx, cy, e) {
+  const a = edgeAngle(e);
+  return { x: cx + APOTHEM * Math.cos(a), y: cy + APOTHEM * Math.sin(a) };
+}
+
+function neighborCenter(cx, cy, e) {
+  const a = edgeAngle(e);
+  return { x: cx + Math.cos(a) * APOTHEM * 2, y: cy + Math.sin(a) * APOTHEM * 2 };
+}
+
+// ── Tile layout ──────────────────────────────────────────────────────────────
+function getCenters() {
+  let cx = 0, cy = 0;
+  const tiles = [];
+  for (const t of SEQ) {
+    tiles.push({ x: cx, y: cy, t });
+    const n = neighborCenter(cx, cy, t[1]);
+    cx = n.x; cy = n.y;
+  }
+  return { tiles, nextX: cx, nextY: cy };
+}
+
+function recalcCrosses() {
+  const { tiles } = getCenters();
+  const seen = new Map();
+  for (let i = 0; i < tiles.length; i++) {
+    const k = Math.round(tiles[i].x) + '_' + Math.round(tiles[i].y);
+    const t = tiles[i].t;
+    if (seen.has(k) && t[2] !== 'X') {
+      const prev = seen.get(k);
+      t[2] = 'X'; t[3] = SEQ[prev][0]; t[4] = SEQ[prev][1];
+    }
+    seen.set(k, i);
+  }
+}
+
+// ── Render ───────────────────────────────────────────────────────────────────
+function hexPath(cx, cy, r) {
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a  = Math.PI / 3 * i;
+    const px = cx + r * Math.cos(a);
+    const py = cy + r * Math.sin(a);
+    i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+}
+
+function render() {
+  const vp = document.getElementById('viewport');
+  const W  = vp.clientWidth;
+  const H  = vp.clientHeight;
+  ctx.clearRect(0, 0, W, H);
+  ctx.save();
+  ctx.translate(panX, panY);
+  ctx.scale(zoom, zoom);
+
+  const { tiles, nextX, nextY } = getCenters();
+  const last = SEQ[SEQ.length - 1];
+
+  // hex fills
+  for (const tile of tiles) {
+    hexPath(tile.x, tile.y, R);
+    ctx.fillStyle = '#1e2030';
+    ctx.fill();
+    ctx.strokeStyle = '#3a3f5c';
+    ctx.lineWidth = 1.5 / zoom;
+    ctx.stroke();
+  }
+
+  // ghost next hex
+  if (last[2] !== 'F') {
+    hexPath(nextX, nextY, R);
+    ctx.fillStyle = 'rgba(255,255,255,0.04)';
+    ctx.fill();
+    ctx.setLineDash([4 / zoom, 4 / zoom]);
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 1.5 / zoom;
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // road paths
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (const tile of tiles) {
+    const t  = tile.t;
+    const p1 = edgeMid(tile.x, tile.y, t[0]);
+    const p2 = edgeMid(tile.x, tile.y, t[1]);
+    const isS = t[2] === 'S', isF = t[2] === 'F', isN = t[2] === 'N', isX = t[2] === 'X';
+    ctx.strokeStyle = isS ? '#00e87a' : isF ? '#ff4466' : isN ? '#00aaff' : '#ffcc00';
+    ctx.lineWidth   = (isN ? 10 : 20) / zoom;
+    ctx.beginPath(); ctx.moveTo(p1.x, p1.y);
+    ctx.quadraticCurveTo(tile.x, tile.y, p2.x, p2.y);
+    ctx.stroke();
+    if (isX && t.length >= 5) {
+      const p3 = edgeMid(tile.x, tile.y, t[3]);
+      const p4 = edgeMid(tile.x, tile.y, t[4]);
+      ctx.beginPath(); ctx.moveTo(p3.x, p3.y);
+      ctx.quadraticCurveTo(tile.x, tile.y, p4.x, p4.y);
+      ctx.stroke();
+    }
+  }
+
+  // build handles on next hex
+  if (last[2] !== 'F') {
+    const entryBack = (last[1] + 3) % 6;
+    for (let i = 0; i < 6; i++) {
+      if (i === entryBack) continue;
+      const em    = edgeMid(nextX, nextY, i);
+      const dist  = Math.hypot(mouseWX - em.x, mouseWY - em.y);
+      const hover = dist < APOTHEM * 0.65;
+      const rDot  = (hover ? 12 : 9) / zoom;
+      ctx.beginPath(); ctx.arc(em.x, em.y, rDot, 0, Math.PI * 2);
+      ctx.fillStyle = hover ? '#00ff88' : 'rgba(60,200,120,0.55)';
+      ctx.fill();
+    }
+  }
+
+  ctx.restore();
+}
+
+// ── Place tile ───────────────────────────────────────────────────────────────
+function tryPlace(clientX, clientY) {
+  const { x: wx, y: wy } = clientToWorld(clientX, clientY);
+  const last = SEQ[SEQ.length - 1];
+  if (last[2] === 'F') return false;
+  const { nextX, nextY } = getCenters();
+  const entryBack = (last[1] + 3) % 6;
+  for (let i = 0; i < 6; i++) {
+    if (i === entryBack) continue;
+    const em = edgeMid(nextX, nextY, i);
+    if (Math.hypot(wx - em.x, wy - em.y) < APOTHEM * 0.65) {
+      SEQ.push([entryBack, i]);
+      recalcCrosses();
+      updateExport();
+      return true;
+    }
+  }
+  return false;
+}
+
+// ── UI actions ───────────────────────────────────────────────────────────────
+function updateExport() {
+  document.getElementById('output').value = JSON.stringify(SEQ);
+  render();
+}
+
+function setModifier(mod) {
+  if (SEQ.length <= 1) return;
+  const t = SEQ[SEQ.length - 1];
+  if (t[2] === 'S' || t[2] === 'F') return;
+  if (mod === null) {
+    t.splice(2); // remove modifier
+    document.getElementById('btnNorm').classList.add('active');
+    document.getElementById('btnNarr').classList.remove('active');
+  } else {
+    t[2] = mod;
+    document.getElementById('btnNorm').classList.remove('active');
+    document.getElementById('btnNarr').classList.add('active');
+  }
+  updateExport();
+}
+
+function setFinish() {
+  if (SEQ.length <= 1) return;
+  const t = SEQ[SEQ.length - 1];
+  if (t[2] !== 'S') { t[2] = 'F'; updateExport(); }
+}
+
+function undo() {
+  if (SEQ.length > 1) { SEQ.pop(); recalcCrosses(); updateExport(); }
+}
+
+function clearTrack() {
+  SEQ = [[3, 0, 'S']];
+  const vp  = document.getElementById('viewport');
+  panX = vp.clientWidth  / 2;
+  panY = vp.clientHeight / 3;
+  zoom = 1;
+  updateExport();
+}
+
+function copyCode() {
+  const txt = document.getElementById('output').value;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(txt).then(() => alert('Kód vágólapra másolva!'));
+  } else {
+    document.getElementById('output').select();
+    document.execCommand('copy');
+    alert('Kód vágólapra másolva!');
+  }
+}
+
+// ── Input: mouse ─────────────────────────────────────────────────────────────
+let dragging = false, dragStartX = 0, dragStartY = 0, panBase = {x:0, y:0};
+
+cvs.addEventListener('mousedown', e => {
+  if (e.button !== 0) return;
+  if (!tryPlace(e.clientX, e.clientY)) {
+    dragging = true;
+    dragStartX = e.clientX; dragStartY = e.clientY;
+    panBase = { x: panX, y: panY };
+  }
+});
+window.addEventListener('mousemove', e => {
+  const w = clientToWorld(e.clientX, e.clientY);
+  mouseWX = w.x; mouseWY = w.y;
+  if (dragging) {
+    panX = panBase.x + (e.clientX - dragStartX);
+    panY = panBase.y + (e.clientY - dragStartY);
+  }
+  render();
+});
+window.addEventListener('mouseup', () => { dragging = false; });
+cvs.addEventListener('wheel', e => {
+  const f = e.deltaY < 0 ? 1.1 : 0.9;
+  const w = clientToWorld(e.clientX, e.clientY);
+  zoom *= f;
+  // zoom toward cursor
+  panX = e.clientX - cvs.getBoundingClientRect().left - w.x * zoom;
+  panY = e.clientY - cvs.getBoundingClientRect().top  - w.y * zoom;
+  render();
+}, { passive: true });
+
+// ── Input: touch ─────────────────────────────────────────────────────────────
+let touch1 = null, touch2 = null;
+let pinchDist0 = 0, panBase2 = {x:0, y:0};
+let tapStartX = 0, tapStartY = 0, tapMoved = false;
+
+cvs.addEventListener('touchstart', e => {
+  e.preventDefault();
+  if (e.touches.length === 1) {
+    const t = e.touches[0];
+    tapStartX = t.clientX; tapStartY = t.clientY; tapMoved = false;
+    touch1 = { x: t.clientX, y: t.clientY };
+    panBase2 = { x: panX, y: panY };
+  } else if (e.touches.length === 2) {
+    touch1 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    touch2 = { x: e.touches[1].clientX, y: e.touches[1].clientY };
+    pinchDist0 = Math.hypot(touch1.x - touch2.x, touch1.y - touch2.y);
+    panBase2 = { x: panX, y: panY };
+  }
+}, { passive: false });
+
+cvs.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (e.touches.length === 1) {
+    const t = e.touches[0];
+    if (Math.hypot(t.clientX - tapStartX, t.clientY - tapStartY) > 8) tapMoved = true;
+    panX = panBase2.x + (t.clientX - touch1.x);
+    panY = panBase2.y + (t.clientY - touch1.y);
+    const w = clientToWorld(t.clientX, t.clientY);
+    mouseWX = w.x; mouseWY = w.y;
+    render();
+  } else if (e.touches.length === 2) {
+    const t0 = e.touches[0], t1 = e.touches[1];
+    const mid = { x: (t0.clientX + t1.clientX) / 2, y: (t0.clientY + t1.clientY) / 2 };
+    const dist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+    const scale = dist / pinchDist0;
+    zoom = Math.max(0.3, Math.min(5, zoom * scale));
+    pinchDist0 = dist;
+    panX = panBase2.x + (mid.x - (touch1.x + touch2.x) / 2);
+    panY = panBase2.y + (mid.y - (touch1.y + touch2.y) / 2);
+    render();
+  }
+}, { passive: false });
+
+cvs.addEventListener('touchend', e => {
+  e.preventDefault();
+  if (e.changedTouches.length === 1 && e.touches.length === 0 && !tapMoved) {
+    const t = e.changedTouches[0];
+    tryPlace(t.clientX, t.clientY);
+  }
+  touch1 = touch2 = null;
+}, { passive: false });
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  resize();
+  clearTrack();
+});
+</script>
+</body>
+</html>
