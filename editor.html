@@ -39,7 +39,28 @@
       padding: 4px 12px; border-radius: 20px; pointer-events: none;
       white-space: nowrap;
     }
-  </style>
+  
+  #levelSelect {
+    width: 100%;
+    margin-bottom: 8px;
+    background: #2a2a38;
+    color: #fff;
+    border: 1px solid #445;
+    padding: 8px;
+    border-radius: 6px;
+    font-family: sans-serif;
+  }
+  .row-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .row-wrap button {
+    flex: 1;
+    min-width: calc(33% - 6px);
+  }
+
+</style>
 </head>
 <body>
 
@@ -49,7 +70,21 @@
 </div>
 
 <div id="ui">
-  <div class="row">
+  
+    <select id="levelSelect" onchange="loadSelectedLevel()">
+      <option value="0">Track 1 - kis hatszög kör</option>
+      <option value="1">Track 2 - megnyújtott oval</option>
+      <option value="2">Track 3 - széles oval</option>
+      <option value="3">Track 4 - S-kanyar</option>
+      <option value="4">Track 5 - figure-8</option>
+      <option value="5">Track 6 - S-kanyar narrow</option>
+      <option value="6">Track 7 - szűk chicane</option>
+      <option value="7">Track 8 - figure-8 hosszú</option>
+      <option value="8">Track 9 - nagy szerpentin</option>
+      <option value="9">Track 10 - szerpentin + cross</option>
+    </select>
+
+      <div class="row">
     <button onclick="setModifier(null)" id="btnNorm" class="active">🛣 Normal</button>
     <button onclick="setModifier('N')" id="btnNarr">⚠️ Narrow</button>
     <button onclick="setFinish()" class="finish">🏁 Finish</button>
@@ -71,7 +106,75 @@ const R       = 48;                          // hex circumradius
 const APOTHEM = R * Math.sqrt(3) / 2;        // flat-to-flat / 2
 
 // ── State ────────────────────────────────────────────────────────────────────
-let SEQ = [[3, 0, 'S']];
+
+const LEVEL_DATA = [
+  // 1 – kis hatszög kör (intro)
+  [[3,0,'S'],[3,1],[4,2],[5,3],[0,4],[1,5,'F']],
+  // 2 – megnyújtott oval
+  [[3,0,'S'],[3,0],[3,1],[4,2],[5,2],[5,3],[0,4],[1,4],[1,5,'F']],
+  // 3 – széles oval
+  [[3,0,'S'],[3,0],[3,0],[3,1],[4,1],[4,2],[5,2],[5,3],[0,4],[1,4],[1,5,'F']],
+  // 4 – S-kanyar, nincs cross
+  [[3,0,'S'],[3,1],[4,5],[2,4],[1,4],[1,5],[2,1],[4,0],[3,5],[2,0,'F']],
+  // 5 – figure-8, egy kereszteződés
+  [[3,0,'S'],[3,0,'X',4,1],[3,5],[2,4],[1,3],[0,2],[5,1],[4,1],[4,3],[0,4,'F']],
+  // 6 – S-kanyar hosszabb + narrow
+  [[3,0,'S'],[3,1,'N'],[4,5],[2,4],[1,4],[1,5],[2,1],[4,1],[4,5],[2,4],[1,3],[0,2],[5,0,'F']],
+  // 7 – szűk chicane
+  [[3,0,'S'],[3,1,'N'],[4,0,'N'],[3,1],[4,1],[4,0],[3,5],[2,5],[2,4],[1,3],[0,2],[5,1,'N'],[4,0,'F']],
+  // 8 – figure-8 hosszú egyenessel
+  [[3,0,'S'],[3,0],[3,0],[3,0,'X',4,1],[3,5],[2,4],[1,3],[0,2],[5,1],[4,1],[4,0],[3,0],[3,5],[2,0,'F']],
+  // 9 – nagy szerpentin
+    [[3,0,'S'],[3,2],[5,3],[0,3],[0,1],[4,0],[3,2],[5,3,'N'],[0,3,'N'],[0,5,'N'],[2,3],[0,2],[5,0],[3,2,'X',0,5],[5,1],[4,0],[3,4],[1,0],[3,2],[5,0,'X',3,4],[3,4],[1,0,'X',3,2],[3,2],[5,0,'X',3,4],[3,4],[1,0,'X',3,2],[3,2],[5,0,'X',3,4],[3,0,'F']],
+  // 10 – szerpentin + cross + szűk szakaszok
+    [[3,0,'S'],[3,0],[3,4],[1,3],[0,3],[0,2],[5,2],[5,0],[3,0],[3,0],[3,0],[3,5],[2,5],[2,3],[0,4],[1,3],[0,4],[1,5],[2,1],[4,3],[0,3,'X',1,5],[0,3,'F']]
+];
+
+let currentTrackIndex = 0;
+
+function loadSelectedLevel() {
+  currentTrackIndex = parseInt(document.getElementById('levelSelect').value);
+  SEQ = JSON.parse(JSON.stringify(LEVEL_DATA[currentTrackIndex]));
+
+  // Center track
+  const vp = document.getElementById('viewport');
+  panX = vp.clientWidth / 2;
+  panY = vp.clientHeight / 3;
+  zoom = 1;
+
+  recalcCrosses();
+  updateExport();
+  render();
+}
+
+function saveAllTracks() {
+  // Save current track first
+  LEVEL_DATA[currentTrackIndex] = JSON.parse(JSON.stringify(SEQ));
+
+  // Format as constant
+  let out = "const LEVEL_DATA = [\n";
+  for(let i=0; i<LEVEL_DATA.length; i++) {
+    out += "  " + JSON.stringify(LEVEL_DATA[i]) + (i < LEVEL_DATA.length - 1 ? "," : "") + "\n";
+  }
+  out += "];";
+
+  document.getElementById('output').value = out;
+
+  // Copy to clipboard
+  const txt = document.getElementById('output');
+  txt.select();
+  document.execCommand('copy');
+  alert('Összes pálya kódja a vágólapra másolva!');
+}
+
+// Override updateExport to also save to LEVEL_DATA
+const oldUpdateExport = updateExport;
+updateExport = function() {
+  LEVEL_DATA[currentTrackIndex] = JSON.parse(JSON.stringify(SEQ));
+  oldUpdateExport();
+};
+
+let SEQ = JSON.parse(JSON.stringify(LEVEL_DATA[0]));
 let panX = 0, panY = 0;
 let zoom = 1;
 let mouseWX = 0, mouseWY = 0;               // world-space mouse pos
