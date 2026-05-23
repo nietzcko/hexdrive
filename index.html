@@ -57,7 +57,13 @@ body { background:#04060a; overflow:hidden; width:100vw; height:100vh; font-fami
   <div class="cb" id="bL" style="left:0;display:none;"><span style="color:rgba(255,255,255,0.2);font-size:32px;">◀</span></div>
   <div class="cb" id="bR" style="right:0;display:none;"><span style="color:rgba(255,255,255,0.2);font-size:32px;">▶</span></div>
 </div>
-<div id="toggleIndicator" style="position:fixed;bottom:40px;left:50%;transform:translateX(-50%);z-index:20;display:none;pointer-events:none;text-align:center;opacity:0.25;">
+
+    <div id="tilePopup" style="position:fixed; top:40%; left:50%; transform:translate(-50%, -50%); z-index:50; display:none; flex-direction:column; align-items:center; pointer-events:none;">
+      <div id="popupTime" style="font-size:32px; font-weight:bold; color:#00ffcc; text-shadow:0 2px 5px rgba(0,0,0,0.8);"></div>
+      <div id="popupSpeed" style="font-size:18px; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,0.8); margin-top:5px;"></div>
+    </div>
+
+    <div id="toggleIndicator" style="position:fixed;bottom:40px;left:50%;transform:translateX(-50%);z-index:20;display:none;pointer-events:none;text-align:center;opacity:0.25;">
   <div id="toggleArrow" style="font-size:42px;color:#fff;transition:transform 0.1s,opacity 0.1s;">▶</div>
   <div style="font-size:11px;color:#fff;letter-spacing:2px;margin-top:-4px;">TAP</div>
 </div>
@@ -375,7 +381,7 @@ const TSIZE=Math.ceil(R*2+10);
 const tCache=new Map();
 
 function renderTile(tile){
-  if(tile.skipRender) { const oc=document.createElement("canvas"); oc.width=oc.height=1; return oc; }
+  if(tile.skipRender) { if(tCache.has("skip")) return tCache.get("skip"); const oc=document.createElement("canvas"); oc.width=oc.height=1; tCache.set("skip", oc); return oc; }
   try{
   const ck=`${tile.key}_${tile.entry}_${tile.exit}_${tile.isNarrow?'N':'W'}${tile.isCross?'C'+tile.entry2+tile.exit2:''}_${tile.biome}_${tile.theme||'grass'}`;
   if(tCache.has(ck))return tCache.get(ck);
@@ -896,7 +902,7 @@ function update(ts){
 
   if(!car.falling&&!finished){
     for(const t of trackTiles){
-      if(!t.visited&&Math.hypot(car.x-t.cx,car.y-t.cy)<APOTHEM){t.visited=true;updHUD();}
+      if(!t.visited&&Math.hypot(car.x-t.cx,car.y-t.cy)<APOTHEM){  t.visited=true;  updHUD();  if (!t.isStart && !t.isFinish && !t.isDeco) {    showTilePopup(raceTime, car.speed);  }}
     }
   }
 
@@ -1072,6 +1078,31 @@ function drawScene(){
   drawParticles();
   drawCar();
   ctx.restore();
+}
+
+
+let tilePopupTimer = null;
+function showTilePopup(time, speed) {
+  const popup = document.getElementById('tilePopup');
+  document.getElementById('popupTime').textContent = fmt(time);
+  document.getElementById('popupSpeed').textContent = Math.round(speed) + ' km/h';
+
+  popup.style.display = 'flex';
+  popup.style.opacity = '1';
+  popup.style.transform = 'translate(-50%, -50%) scale(1)';
+  popup.style.transition = 'none';
+
+  clearTimeout(tilePopupTimer);
+
+  setTimeout(() => {
+    popup.style.transition = 'opacity 0.3s ease-out, transform 0.3s ease-out';
+    popup.style.opacity = '0';
+    popup.style.transform = 'translate(-50%, -80%) scale(1.1)';
+  }, 700);
+
+  tilePopupTimer = setTimeout(() => {
+    popup.style.display = 'none';
+  }, 1000);
 }
 
 function updHUD(){
