@@ -69,7 +69,7 @@ body { background:#04060a; overflow:hidden; width:100vw; height:100vh; font-fami
 </div>
 <canvas id="hexBg" style="position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;opacity:1;"></canvas>
 <div id="lvlSel">
-  <div style="position:absolute;top:16px;right:20px;color:rgba(255,255,255,0.3);font-size:14px;font-weight:bold;letter-spacing:2px;z-index:110;">v173</div>
+  <div style="position:absolute;top:16px;right:20px;color:rgba(255,255,255,0.3);font-size:14px;font-weight:bold;letter-spacing:2px;z-index:110;">v181</div>
   <h1 style="text-align:center;color:#fff;font-size:clamp(30px,8vw,60px);letter-spacing:8px;text-shadow:0 4px 8px rgba(0,0,0,0.8);margin-bottom:10px;">HEX RACER</h1>
   <p style="color:rgba(255,255,255,0.7);font-size:14px;letter-spacing:1px;text-align:center;margin-bottom:40px;max-width:600px;line-height:1.6;">
     Earn at least 1 star (★★★) to unlock the next track!<br>
@@ -94,7 +94,7 @@ if (!CanvasRenderingContext2D.prototype.roundRect) {
 // ── CONFIG ────────────────────────────────────────────
 const R       = 1020;
 const ROAD_W  = 420;
-const STAR3_TIMES = [18000, 22000, 25000, 22000, 20000, 25000, 28000, 25000, 30000, 35000];
+const STAR3_TIMES = [18000, 22000, 25000, 22000, 20000, 25000, 28000, 25000, 45000, 45000];
 const getStarTimes = (idx) => {
   const t3 = STAR3_TIMES[idx] || 20000;
   return [t3 + 5000, t3 + 2000, t3];
@@ -180,7 +180,7 @@ function initMenu(){
   currentLevelIdx=0;
   const tlvl=LEVEL_DATA[0];
   SEQ=tlvl.map(t=>({entry:t[0],exit:t[1],isStart:t[2]==='S',isFinish:t[2]==='F',isNarrow:t[2]==='N',isCross:t[2]==='X',entry2:t[3]??-1,exit2:t[4]??-1}));
-  tCache.clear();buildTrack();warmCache();
+  tCache.forEach(oc => { oc.width = 0; oc.height = 0; }); tCache.clear();buildTrack();warmCache();
   cam={x:trackTiles[0].cx,y:trackTiles[0].cy,angle:0,zoom:0.6};
   car=null;
   state='menu';
@@ -755,7 +755,7 @@ function warmCache(){
 }
 function resetGame(){
   _finishFrameDone=false;
-  tCache.clear();buildTrack();warmCache();
+  tCache.forEach(oc => { oc.width = 0; oc.height = 0; }); tCache.clear();buildTrack();warmCache();
   trackTiles.forEach(t=>t.visited=false);
   toggleDir=1;toggleHeld=false;_syncToggleUI();
   const st=trackTiles[0],em=edgeMid(st.cx,st.cy,st.exit),em0=edgeMid(st.cx,st.cy,st.entry);
@@ -1085,7 +1085,7 @@ let tilePopupTimer = null;
 function showTilePopup(time, speed) {
   const popup = document.getElementById('tilePopup');
   document.getElementById('popupTime').textContent = fmt(time);
-  document.getElementById('popupSpeed').textContent = Math.round(speed) + ' km/h';
+  document.getElementById('popupSpeed').textContent = Math.round(speed * (200 / 900)) + ' km/h';
 
   popup.style.display = 'flex';
   popup.style.opacity = '1';
