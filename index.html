@@ -52,10 +52,10 @@ body { background:#04060a; overflow:hidden; width:100vw; height:100vh; font-fami
 
 <div id="fl"></div>
 
-<div id="btnRetry" class="icon-btn" onclick="resetGame();state='racing';" style="position:fixed;top:14px;left:16px;z-index:20;display:none;pointer-events:auto;">⟳</div><div id="btnMenu" class="icon-btn" onclick="initMenu()" style="position:fixed;top:14px;right:16px;z-index:20;display:none;pointer-events:auto;">☰</div>
+<div id="btnRetry" class="icon-btn" onclick="resetGame();state='racing';" style="position:fixed;top:14px;left:16px;z-index:20;display:none;pointer-events:auto;">&#10227;</div><div id="btnMenu" class="icon-btn" onclick="initMenu()" style="position:fixed;top:14px;right:16px;z-index:20;display:none;pointer-events:auto;">&#9776;</div>
 <div id="ctrl">
-  <div class="cb" id="bL" style="left:0;display:none;"><span style="color:rgba(255,255,255,0.2);font-size:32px;">◀</span></div>
-  <div class="cb" id="bR" style="right:0;display:none;"><span style="color:rgba(255,255,255,0.2);font-size:32px;">▶</span></div>
+  <div class="cb" id="bL" style="left:0;display:none;"><span style="color:rgba(255,255,255,0.2);font-size:32px;">&#9664;</span></div>
+  <div class="cb" id="bR" style="right:0;display:none;"><span style="color:rgba(255,255,255,0.2);font-size:32px;">&#9654;</span></div>
 </div>
 
     <div id="tilePopup" style="position:fixed; top:40%; left:50%; transform:translate(-50%, -50%); z-index:50; display:none; flex-direction:column; align-items:center; pointer-events:none;">
@@ -63,16 +63,25 @@ body { background:#04060a; overflow:hidden; width:100vw; height:100vh; font-fami
       <div id="popupSpeed" style="font-size:18px; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,0.8); margin-top:5px;"></div>
     </div>
 
-    <div id="toggleIndicator" style="position:fixed;bottom:40px;left:50%;transform:translateX(-50%);z-index:20;display:none;pointer-events:none;text-align:center;opacity:0.25;">
-  <div id="toggleArrow" style="font-size:42px;color:#fff;transition:transform 0.1s,opacity 0.1s;">▶</div>
-  <div style="font-size:11px;color:#fff;letter-spacing:2px;margin-top:-4px;">TAP</div>
+    <div id="toggleIndicator" style="position:fixed;bottom:48px;left:50%;transform:translateX(-50%);z-index:20;display:none;pointer-events:none;text-align:center;opacity:0.55;transition:opacity 0.15s;">
+  <div id="togglePill" style="display:flex;align-items:center;gap:10px;padding:10px 22px;border-radius:40px;background:rgba(0,0,0,0.45);border:2px solid rgba(255,255,255,0.35);box-shadow:0 0 0 rgba(0,207,255,0);transition:box-shadow 0.12s,border-color 0.12s,transform 0.1s;">
+    <div id="toggleArrow" style="font-size:40px;line-height:1;color:#fff;transition:transform 0.12s,color 0.12s;text-shadow:0 2px 6px rgba(0,0,0,0.7);">&#9654;</div>
+    <div style="text-align:left;">
+      <div id="toggleLabel" style="font-size:15px;font-weight:bold;letter-spacing:2px;color:#fff;line-height:1.1;">TAP TO STEER</div>
+      <div style="font-size:10px;letter-spacing:1px;color:rgba(255,255,255,0.7);">HOLD &amp; RELEASE TO FLIP</div>
+    </div>
+  </div>
 </div>
+<style>
+@keyframes hexPulse { 0%,100%{transform:translateX(-50%) scale(1);} 50%{transform:translateX(-50%) scale(1.04);} }
+#toggleIndicator.idle { animation:hexPulse 1.6s ease-in-out infinite; }
+</style>
 <canvas id="hexBg" style="position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;opacity:1;"></canvas>
 <div id="lvlSel">
   <div style="position:absolute;top:16px;right:20px;color:rgba(255,255,255,0.3);font-size:14px;font-weight:bold;letter-spacing:2px;z-index:110;">v181</div>
   <h1 style="text-align:center;color:#fff;font-size:clamp(30px,8vw,60px);letter-spacing:8px;text-shadow:0 4px 8px rgba(0,0,0,0.8);margin-bottom:10px;">HEX RACER</h1>
   <p style="color:rgba(255,255,255,0.7);font-size:14px;letter-spacing:1px;text-align:center;margin-bottom:40px;max-width:600px;line-height:1.6;">
-    Earn at least 1 star (★★★) to unlock the next track!<br>
+    Earn at least 1 star (&#9733;&#9733;&#9733;) to unlock the next track!<br>
       <span style="color:#ffcc00">Drift carefully on the dark asphalt, keep your momentum, and don't fall off!</span>
   </p>
   <div id="lvlGrid"></div>
@@ -91,7 +100,7 @@ if (!CanvasRenderingContext2D.prototype.roundRect) {
   };
 }
 
-// ── CONFIG ────────────────────────────────────────────
+// CONFIG
 const R       = 1020;
 const ROAD_W  = 420;
 const STAR3_TIMES = [18000, 22000, 25000, 22000, 20000, 25000, 28000, 25000, 45000, 45000];
@@ -100,7 +109,6 @@ const getStarTimes = (idx) => {
   return [t3 + 5000, t3 + 2000, t3];
 };
 
-// Calculate how many stars a time earns
 const calcStars = (idx, time) => {
   if (!time) return 0;
   const [t1, t2, t3] = getStarTimes(idx);
@@ -109,7 +117,6 @@ const calcStars = (idx, time) => {
   if (time <= t1) return 1;
   return 0;
 };
-
 
 const CAR_L  = 60;
 const CAR_W  = 12;
@@ -120,23 +127,20 @@ const CAR_REAR_AXLE   = CAR_L * 0.32;
 
 const MAX_ROAD = 900;
 const MAX_HEX  = 280;
-const ACCEL    = 600;
+const ACCEL    = 820;
 const BRAKE    = 2000;
 const COAST    = 140;
+const SPEED_DRAG = 110;   // cubic aero-style drag: negligible at low speed, bites hard near the top
 const STEER    = 1.5;
 
-// Steering penalty: rapid left-right toggling costs speed
-const STEER_PENALTY = 60;   // speed units/s lost per steer reversal
+const STEER_PENALTY = 60;
+const GRASS_DRAG = 1.5;
 
-// Grass: gentler slowdown
-const GRASS_DRAG = 1.5;     // was 1.5 — speed multiplied by (1 - GRASS_DRAG*dt)
-
-// Camera
 const CAM_POS_LERP   = 0.05;
 const CAM_ANGLE_LERP = 0.04;
 const CAM_ZOOM_LERP  = 0.025;
 const CAM_AHEAD      = 0.35;
-const ZOOM_BASE      = 0.48;   // slightly further back than before (was 0.55)
+const ZOOM_BASE      = 0.48;
 const ZOOM_RANGE     = 0.18;
 
 const cv  = document.getElementById('c');
@@ -209,7 +213,6 @@ function initMenu(){
   document.getElementById('lvlSel').style.display='flex';
 }
 
-
 function loadLevel(idx){
   currentLevelIdx=idx;
   SEQ=LEVEL_DATA[idx].map(t=>({entry:t[0],exit:t[1],isStart:t[2]==='S',isFinish:t[2]==='F',isNarrow:t[2]==='N',isCross:t[2]==='X',entry2:t[3]??-1,exit2:t[4]??-1}));
@@ -219,7 +222,7 @@ function loadLevel(idx){
   document.getElementById('ctrl').style.display='block';document.getElementById('toggleOverlay').style.display='block';document.getElementById('toggleIndicator').style.display='block';_syncToggleUI();
   document.getElementById('btnRetry').style.display='flex';
   document.getElementById('btnMenu').style.display='flex';
-  
+
   document.getElementById('btnRetry').style.display='flex';
   document.getElementById('hPR').textContent=`PR: ${savedRecords[idx]?fmt(savedRecords[idx]):'--:--.---'}`;
   {
@@ -227,16 +230,16 @@ function loadLevel(idx){
     const stars=calcStars(idx,best);
     const [t1,t2,t3]=getStarTimes(idx);
     const starEl=document.getElementById('hStar');
-    if(stars>=3){ starEl.textContent='★★★'; }
+    if(stars>=3){ starEl.textContent='\u2605\u2605\u2605'; }
     else{
       const target=stars===0?t1:stars===1?t2:t3;
-      starEl.textContent='★'.repeat(stars)+'☆'.repeat(3-stars)+' → '+fmt(target);
+      starEl.textContent='\u2605'.repeat(stars)+'\u2606'.repeat(3-stars)+' \u2192 '+fmt(target);
     }
   }
   resetGame();state='racing';lastTs=performance.now();document.getElementById('c').classList.remove('blur-bg');
 }
 
-// ── HEX MATH ──────────────────────────────────────────
+// HEX MATH
 const APOTHEM = R * Math.sqrt(3) / 2;
 function edgeAngle(e){ return Math.PI/3*e+Math.PI/6; }
 function edgeMid(cx,cy,e){ return {x:cx+APOTHEM*Math.cos(edgeAngle(e)),y:cy+APOTHEM*Math.sin(edgeAngle(e))}; }
@@ -281,7 +284,10 @@ function buildTrack(){
       const key=Math.round(nc.x)+'_'+Math.round(nc.y);
       if(!centerMap.has(key)){
         centerMap.add(key);
-        decoTiles.push({idx:-1,cx:nc.x,cy:nc.y,key:key,isDeco:true,biome:biomes[Math.floor(Math.random()*biomes.length)],isCross:false,visited:true,theme:cTheme});
+        // Deterministic biome from position so retrying the same level yields
+        // identical deco tiles (stable cache keys, no canvas leak, steadier scenery).
+        const h=Math.abs(Math.round(nc.x)*73856093 ^ Math.round(nc.y)*19349663)%biomes.length;
+        decoTiles.push({idx:-1,cx:nc.x,cy:nc.y,key:key,isDeco:true,biome:biomes[h],isCross:false,visited:true,theme:cTheme});
       }
     }
   }
@@ -303,8 +309,37 @@ function buildTrack(){
     }
     currentRing=nextRing;
   }
-  // FIX: Ensure track tiles are drawn ON TOP of decoration/water tiles
   allTiles=[...waterTiles,...decoTiles,...trackTiles];
+  buildSpatialGrid();
+}
+
+// Spatial grid: bucket tiles by coarse world cells so collision only tests
+// the handful of tiles near the car instead of scanning every tile each frame.
+const GRID_CELL = R; // one hex radius per cell
+let spatialGrid=new Map();
+function gridKey(cx,cy){ return Math.floor(cx/GRID_CELL)+'|'+Math.floor(cy/GRID_CELL); }
+function buildSpatialGrid(){
+  spatialGrid=new Map();
+  // A tile of radius R can be reached from any car position within R+margin,
+  // so register each tile into every cell its bounding box touches.
+  const reach=R+10;
+  for(let i=0;i<allTiles.length;i++){
+    const t=allTiles[i];
+    const minGX=Math.floor((t.cx-reach)/GRID_CELL), maxGX=Math.floor((t.cx+reach)/GRID_CELL);
+    const minGY=Math.floor((t.cy-reach)/GRID_CELL), maxGY=Math.floor((t.cy+reach)/GRID_CELL);
+    for(let gx=minGX;gx<=maxGX;gx++){
+      for(let gy=minGY;gy<=maxGY;gy++){
+        const k=gx+'|'+gy;
+        let arr=spatialGrid.get(k);
+        if(!arr){arr=[];spatialGrid.set(k,arr);}
+        arr.push(i);
+      }
+    }
+  }
+}
+function nearbyTileIndices(px,py){
+  const arr=spatialGrid.get(gridKey(px,py));
+  return arr||[];
 }
 function getLocalBezier(tile){
   const lc=TSIZE/2;
@@ -328,7 +363,6 @@ function distToSegment(px,py,ax,ay,bx,by){
 }
 function distToRoadCenter2(px,py,tile){
   if(!tile.isCross||tile.entry2<0)return Infinity;
-  // two arms: entry2->center and exit2->center
   const em2=edgeMid(tile.cx,tile.cy,tile.entry2);
   const em3=edgeMid(tile.cx,tile.cy,tile.exit2);
   const d1=distToSegment(px,py,em2.x,em2.y,tile.cx,tile.cy);
@@ -338,23 +372,31 @@ function distToRoadCenter2(px,py,tile){
 function distToRoadCenter(px,py,tile){
   if(tile.isDeco)return Infinity;
   if(tile.isCross){
-    // straight arms to center for main path too
     const em0=edgeMid(tile.cx,tile.cy,tile.entry);
     const em1=edgeMid(tile.cx,tile.cy,tile.exit);
     const d1=distToSegment(px,py,em0.x,em0.y,tile.cx,tile.cy);
     const d2=distToSegment(px,py,em1.x,em1.y,tile.cx,tile.cy);
-    // also central pad
     const dc=Math.hypot(px-tile.cx,py-tile.cy);
     return Math.min(d1,d2,dc);
   }
-  const bz=getWorldBezier(tile);
+  // Cache the sampled bezier polyline once per tile (geometry is static).
+  let pts=tile._bezPts;
+  if(!pts){
+    const bz=getWorldBezier(tile);
+    pts=new Float64Array(82); // 41 points * (x,y)
+    for(let i=0;i<=40;i++){
+      const p=bezPt(i/40,bz.p0,bz.cp1,bz.cp2,bz.p3);
+      pts[i*2]=p.x; pts[i*2+1]=p.y;
+    }
+    tile._bezPts=pts;
+  }
   let best=Infinity;
-  for(let i=0;i<=40;i++){
-    const pt=bezPt(i/40,bz.p0,bz.cp1,bz.cp2,bz.p3);
-    const d=Math.hypot(px-pt.x,py-pt.y);
+  for(let i=0;i<82;i+=2){
+    const dx=px-pts[i], dy=py-pts[i+1];
+    const d=dx*dx+dy*dy;
     if(d<best)best=d;
   }
-  return best;
+  return Math.sqrt(best);
 }
 function inHex(px,py,cx,cy){
   for(let e=0;e<6;e++){
@@ -376,7 +418,7 @@ function getPhysicsWheels(cx,cy,angle){
   ];
 }
 
-// ── RENDER CACHE ──────────────────────────────────────
+// RENDER CACHE
 const TSIZE=Math.ceil(R*2+10);
 const tCache=new Map();
 
@@ -406,9 +448,8 @@ function renderTile(tile){
   let baseCols = tile.biome==='water' ? ['#184e70'] : (themeBase[thm][isTrack ? 'meadow' : biome] || themeBase.grass.meadow);
 
   if(true) {
-      c.save(); hexPath(0.5); c.clip(); // Strict outer clip to prevent bleeding
+      c.save(); hexPath(0.5); c.clip();
       c.fillStyle=baseCols[0]; c.fill();
-      // Dome highlight (deco + track tiles)
       { const grad=c.createRadialGradient(lc,lc,0,lc,lc,R*1.1);
         grad.addColorStop(0,  'rgba(255,255,255,0.12)');
         grad.addColorStop(0.5,'rgba(255,255,255,0.03)');
@@ -416,7 +457,7 @@ function renderTile(tile){
         c.fillStyle=grad;
         c.beginPath();
         for(let i=0;i<6;i++){const a=Math.PI/3*i;i===0?c.moveTo(lc+R*Math.cos(a),lc+R*Math.sin(a)):c.lineTo(lc+R*Math.cos(a),lc+R*Math.sin(a));}
-        c.closePath(); c.fill(); 
+        c.closePath(); c.fill();
         if (tile.biome === 'water') {
           let seed = tile.cx*13.37 + tile.cy*42.0;
           const rnd = ()=>{seed=(seed*9301+49297)%233280;return seed/233280;};
@@ -429,12 +470,11 @@ function renderTile(tile){
         }
       }
       c.restore();
-      
-    // Catan-style border ON TOP of everything
+
   c.save();
-  hexPath(0.5); c.clip(); // strict clip
+  hexPath(0.5); c.clip();
   c.lineWidth=18; c.strokeStyle='rgba(235, 210, 150, 0.45)'; hexPath(-9); c.stroke();
-  c.lineWidth=12; c.strokeStyle='rgba(20, 15, 10, 1.0)'; hexPath(-4); c.stroke(); // thick solid black border at edge
+  c.lineWidth=12; c.strokeStyle='rgba(20, 15, 10, 1.0)'; hexPath(-4); c.stroke();
   c.restore();
   if(tile.isDeco) { tCache.set(ck,oc); return oc; }
   }
@@ -447,37 +487,29 @@ function renderTile(tile){
   c.save();hexPath(1);c.clip();
   const w=tile.isNarrow?ROAD_W*0.45:ROAD_W;
 
-  // Narrow tile: draw brown gravel shoulders at full ROAD_W before the asphalt
   if(tile.isNarrow){
     drawBez(ROAD_W+30,'rgba(0,0,0,0.3)');
     drawBez(ROAD_W+16,'#4a3010');
     drawBez(ROAD_W,'#7a5228');
-    // subtle gravel texture
     c.setLineDash([30,20]);
     drawBez(ROAD_W*0.9,'#8b6234');
     c.setLineDash([]);
   }
 
-  // Dirt/stone base border
   drawBez(w+30,'rgba(0,0,0,0.3)');
   drawBez(w+16,'#2c2c2c');
-
-  // Base dark stone road
   drawBez(w,'#383838');
 
-  // Big blocky stone segments using lines (very subtle color diff, long dashes)
   c.setLineDash([160, 6]);
   drawBez(w,'#3b3b3b');
   c.setLineDash([200, 8]);
   drawBez(w*0.85,'#353535');
   c.setLineDash([]);
 
-  // Edges
   c.setLineDash([40, 40]);
   drawBez(w-8, 'rgba(0,0,0,0.2)');
   c.setLineDash([]);
 
-  // Center line (worn)
   c.setLineDash([40, 40]);
   drawBez(12,'rgba(220,180,50,0.4)');
   c.setLineDash([]);
@@ -490,7 +522,6 @@ function renderTile(tile){
   }
   if(tile.isStart)drawLineAcross(0.05,'#00ff00',12);
   if(tile.isFinish){
-    // Clean checkered pattern
     c.save();
     hexPath(0); c.clip();
     const _sq=220;
@@ -505,7 +536,6 @@ function renderTile(tile){
       }
     }
     c.restore();
-    // Dome highlight over finish
     c.save();
     hexPath(1); c.clip();
     const _fgrad = c.createRadialGradient(lc, lc, 0, lc, lc, R*1.1);
@@ -517,11 +547,7 @@ function renderTile(tile){
     for(let i=0;i<6;i++){const a=Math.PI/3*i;i===0?c.moveTo(lc+R*Math.cos(a),lc+R*Math.sin(a)):c.lineTo(lc+R*Math.cos(a),lc+R*Math.sin(a));}
     c.closePath(); c.fill();
     c.restore();
-    
   }
-    // Cross tile: junction with central pad + 4 arms to edges
-  // Kereszteződés
-  // Kereszteződés
   if(tile.isCross && tile.entry2>=0 && tile.exit2>=0){
     c.save();hexPath(1);c.clip();
 
@@ -539,13 +565,11 @@ function renderTile(tile){
       c.lineWidth = lineWidth;
       c.lineCap = 'butt';
       c.stroke();
-
       c.beginPath();
       c.arc(lc, lc, lineWidth/2, 0, Math.PI*2);
       c.fillStyle = color;
       c.fill();
     }
-
     function drawDashedCross(lineWidth, color, dash) {
       c.beginPath();
       c.moveTo(p1.x, p1.y); c.lineTo(p2.x, p2.y);
@@ -557,53 +581,35 @@ function renderTile(tile){
       c.stroke();
       c.setLineDash([]);
     }
-
-    // 1. Árnyék / föld alap
     drawBaseCross(w + 30, 'rgba(0,0,0,0.3)');
-    // 2. Szegély
     drawBaseCross(w + 16, '#2c2c2c');
-    // 3. Tiszta aszfalt 
     drawBaseCross(w, '#383838');
-
-    // 4. Sima út textúrák (a halvány repedések) 
-    // Mivel a játékos belehajt a kereszteződésbe, vizuálisan jobb ha VÉGIGFUT az alap útminta!
     drawDashedCross(w, '#3b3b3b', [160, 6]);
     drawDashedCross(w * 0.85, '#353535', [200, 8]);
-
-    // 5. Kopásnyom középen: gumiabroncsok okozta sötétedés
     const wearGrad = c.createRadialGradient(lc, lc, 0, lc, lc, w*0.8);
     wearGrad.addColorStop(0, 'rgba(0,0,0,0.25)');
     wearGrad.addColorStop(0.5, 'rgba(0,0,0,0.08)');
     wearGrad.addColorStop(1, 'rgba(0,0,0,0)');
     c.beginPath(); c.arc(lc, lc, w*0.8, 0, Math.PI*2);
     c.fillStyle = wearGrad; c.fill();
-
-    // 6. Zebra-szerű felfestés a bekötő utakra (Crosswalk)
-    // Ez jelzi, hogy itt egy kereszteződés jön, és "életet" ad neki!
     for(const e of edges) {
       const em = edgeMid(lc, lc, e);
-      const a = Math.atan2(em.y - lc, em.x - lc); 
-
-      const crosswalkDist = w * 0.7; // Milyen messze van a közepétől
-      const cwWidth = w * 0.8; // Zebrák szélessége
-
+      const a = Math.atan2(em.y - lc, em.x - lc);
+      const crosswalkDist = w * 0.7;
+      const cwWidth = w * 0.8;
       c.save();
       c.translate(lc + Math.cos(a)*crosswalkDist, lc + Math.sin(a)*crosswalkDist);
-      c.rotate(a + Math.PI/2); // Merőleges az útra
-
-      c.strokeStyle = 'rgba(255, 255, 255, 0.4)'; // Halvány fehér zebrák
+      c.rotate(a + Math.PI/2);
+      c.strokeStyle = 'rgba(255, 255, 255, 0.4)';
       c.lineWidth = 14;
-      c.setLineDash([25, 20]); // Sűrű szaggatott vonal
+      c.setLineDash([25, 20]);
       c.lineCap = 'butt';
       c.beginPath();
       c.moveTo(-cwWidth/2, 0);
       c.lineTo(cwWidth/2, 0);
       c.stroke();
-
       c.restore();
     }
-
-    // 7. Sárga szaggatott vonalak a zebráig
     function drawDashedArmsOutward(lineWidth, color, dashArray, startR) {
       c.strokeStyle = color;
       c.lineWidth = lineWidth;
@@ -612,7 +618,7 @@ function renderTile(tile){
       c.beginPath();
       for(const e of edges) {
         const em = edgeMid(lc, lc, e);
-        const a = Math.atan2(em.y - lc, em.x - lc); 
+        const a = Math.atan2(em.y - lc, em.x - lc);
         const startX = lc + Math.cos(a) * startR;
         const startY = lc + Math.sin(a) * startR;
         c.moveTo(startX, startY);
@@ -621,17 +627,8 @@ function renderTile(tile){
       c.stroke();
       c.setLineDash([]);
     }
-
-    // A sárga vonalak megállnak a zebránál
-    // A szürke szélső vonalak is megállnak a zebránál
     drawDashedArmsOutward(w - 8, 'rgba(0,0,0,0.2)', [40, 40], w * 0.7 + 10);
-
-    // A sárga vonalak megállnak a zebránál
     drawDashedArmsOutward(12, 'rgba(220,180,50,0.4)', [40, 40], w * 0.7 + 10);
-
-    // Opcionálisan: A kereszteződés közepén nincs vonal, teljesen üres és letisztult.
-
-    // VAGY: Egy finom sárga "X" figyelmeztető jelzés a közepén
     const xSize = 15;
     c.strokeStyle = 'rgba(220,180,50,0.3)';
     c.lineWidth = 8;
@@ -640,20 +637,19 @@ function renderTile(tile){
     c.moveTo(lc - xSize, lc - xSize); c.lineTo(lc + xSize, lc + xSize);
     c.moveTo(lc - xSize, lc + xSize); c.lineTo(lc + xSize, lc - xSize);
     c.stroke();
-
     c.restore();
   }
   c.save();
-  hexPath(0.5); c.clip(); // strict clip
+  hexPath(0.5); c.clip();
   c.lineWidth=18; c.strokeStyle='rgba(235, 210, 150, 0.45)'; hexPath(-9); c.stroke();
-  c.lineWidth=12; c.strokeStyle='rgba(20, 15, 10, 1.0)'; hexPath(-4); c.stroke(); // thick solid black border at edge
+  c.lineWidth=12; c.strokeStyle='rgba(20, 15, 10, 1.0)'; hexPath(-4); c.stroke();
   c.restore();
 
   tCache.set(ck,oc);return oc;
   }catch(e){console.warn('renderTile err',e);return null;}
 }
 
-// ── PARTICLES ─────────────────────────────────────────
+// PARTICLES
 let particles=[];
 function spawnDust(x,y,count,color){
   for(let i=0;i<count;i++){
@@ -679,11 +675,10 @@ function drawParticles(){
   ctx.globalAlpha=1;
 }
 
-// ── GAME ENGINE ───────────────────────────────────────
+// GAME ENGINE
 let car={},cam={};
 let state='menu',raceStart=0,raceTime=0,finished=false,isNewRecord=false;
 let prevCarX=0,prevCarY=0;
-// Steering reversal tracking
 let lastSteerDir=0, steerReverseTimer=0;
 
 function mkBtn(id){
@@ -698,35 +693,51 @@ const btnL=mkBtn('bL'),btnR=mkBtn('bR');
 let toggleDir=1,toggleHeld=false;
 function _syncToggleUI(){
   const arrow=document.getElementById('toggleArrow');
-  if(arrow)arrow.textContent=toggleDir===1?'▶':'◀';
+  const pill=document.getElementById('togglePill');
+  const ind=document.getElementById('toggleIndicator');
+  const label=document.getElementById('toggleLabel');
+  const goRight=toggleDir===1;
+  if(arrow){
+    arrow.textContent=goRight?'\u25B6':'\u25C0';
+    arrow.style.color=goRight?'#7fe0ff':'#ffcf7f';
+  }
+  if(label)label.textContent=goRight?'STEERING RIGHT':'STEERING LEFT';
+  if(toggleHeld){
+    // Actively steering this frame
+    if(ind){ind.style.opacity='1';ind.classList.remove('idle');}
+    if(pill){
+      pill.style.transform='scale(1.08)';
+      pill.style.borderColor=goRight?'#00cfff':'#ffb040';
+      pill.style.boxShadow=`0 0 22px ${goRight?'rgba(0,207,255,0.6)':'rgba(255,176,64,0.6)'}`;
+    }
+    if(arrow)arrow.style.transform='scale(1.15)';
+  }else{
+    // Idle: gently pulse, dimmer, previewing the direction the NEXT press will steer
+    if(ind){ind.style.opacity='0.55';ind.classList.add('idle');}
+    if(pill){
+      pill.style.transform='scale(1)';
+      pill.style.borderColor='rgba(255,255,255,0.35)';
+      pill.style.boxShadow='0 0 0 rgba(0,0,0,0)';
+    }
+    if(arrow)arrow.style.transform='scale(1)';
+  }
 }
 (function(){
-  // Full-screen overlay for tap detection
   const overlay=document.createElement('div');
   overlay.id='toggleOverlay';
   overlay.style.cssText='position:fixed;inset:0;z-index:19;display:none;pointer-events:auto;touch-action:none;';
   document.body.appendChild(overlay);
 
-  const arrow=document.getElementById('btnToggleArrow');
-
   function onPress(e){
     if(e.cancelable)e.preventDefault();e.stopPropagation();
     toggleHeld=true;
     _syncToggleUI();
-    const ind=document.getElementById('toggleIndicator');
-    const arr=document.getElementById('toggleArrow');
-    if(ind)ind.style.opacity='0.6';
-    if(arr)arr.style.transform='scale(1.15)';
   }
   function onRelease(e){
     if(e.cancelable)e.preventDefault();e.stopPropagation();
     toggleHeld=false;
     toggleDir*=-1;
     _syncToggleUI();
-    const ind=document.getElementById('toggleIndicator');
-    const arr=document.getElementById('toggleArrow');
-    if(ind)ind.style.opacity='0.25';
-    if(arr)arr.style.transform='scale(1.0)';
   }
   overlay.addEventListener('touchstart',onPress,{passive:false});
   overlay.addEventListener('touchend',onRelease,{passive:false});
@@ -747,7 +758,6 @@ document.addEventListener('keyup',e=>{
   if(e.code==='Space'){e.preventDefault();toggleHeld=false;toggleDir*=-1;_syncToggleUI();}
 });
 
-
 function warmCache(){
   for(const t of allTiles){
     renderTile(t);
@@ -755,7 +765,11 @@ function warmCache(){
 }
 function resetGame(){
   _finishFrameDone=false;
-  tCache.forEach(oc => { oc.width = 0; oc.height = 0; }); tCache.clear();buildTrack();warmCache();
+  // Retry keeps the same level, so we DON'T wipe the tile-canvas cache here
+  // (that was the main cause of the hitch on retry). buildTrack still runs to
+  // reset the spatial grid and cached bezier points; warmCache only renders
+  // tiles not already in cache.
+  buildTrack();warmCache();
   trackTiles.forEach(t=>t.visited=false);
   toggleDir=1;toggleHeld=false;_syncToggleUI();
   const st=trackTiles[0],em=edgeMid(st.cx,st.cy,st.exit),em0=edgeMid(st.cx,st.cy,st.entry);
@@ -768,8 +782,6 @@ function resetGame(){
   raceStart=0;raceTime=0;finished=false;isNewRecord=false;updHUD();
 }
 
-
-
 let lastTs=0;
 function update(ts){
   const dt=Math.min((ts-lastTs)/1000,0.05);lastTs=ts;
@@ -778,10 +790,9 @@ function update(ts){
   updateParticles(dt);
 
   if(car.falling){
-    car.fallAlpha-=dt*1.2;  // slower fade
-    car.speed*=0.97;         // gentler slowdown while falling
+    car.fallAlpha-=dt*1.2;
+    car.speed*=0.97;
     car.x+=Math.cos(car.angle)*car.speed*dt;car.y+=Math.sin(car.angle)*car.speed*dt;
-    // dust while falling
     if(Math.random()<0.3) spawnDust(car.x,car.y,1,'rgba(180,160,100,0.8)');
     if(car.fallAlpha<=0){resetGame();state='racing';doFlash('OFF TRACK!','#ff3366');}
     updHUD();return;
@@ -795,24 +806,33 @@ function update(ts){
 
   const wasBraking=car.isBraking; const gas=goL||goR,brake=!finished&&!gas; car.isBraking=brake; if(brake && !wasBraking) car.skidId=(car.skidId||0)+1;
 
-  // Steering reversal penalty
   const curSteer=goL?-1:goR?1:0;
   if(curSteer!==0&&lastSteerDir!==0&&curSteer!==lastSteerDir){
-    // direction reversed — apply speed penalty
     car.speed=Math.max(0,car.speed-STEER_PENALTY*(car.speed/MAX_ROAD));
-    steerReverseTimer=0.12; // brief visual wobble window
+    steerReverseTimer=0.12;
+    // Visible feedback: only spark when it actually costs meaningful speed.
+    if(car.speed>120){
+      const fx=car.x+Math.cos(car.angle)*CAR_FRONT_AXLE;
+      const fy=car.y+Math.sin(car.angle)*CAR_FRONT_AXLE;
+      spawnDust(fx,fy,5,'rgba(255,180,60,0.9)');
+    }
   }
   if(curSteer!==0)lastSteerDir=curSteer;
   if(steerReverseTimer>0)steerReverseTimer-=dt;
 
   if(finished){car.speed-=200*dt;car.steerVisual*=0.85;}
   else{
-    if(gas)car.speed+=ACCEL*dt;
+    // Engine force tapers as you approach the top, so acceleration is snappy off
+    // the line but the last stretch of speed has to be worked for.
+    if(gas)car.speed+=ACCEL*(1-car.speed/MAX_ROAD)*dt;
     if(car.isBraking){ car.speed -= BRAKE * dt * Math.max(0.1, Math.min(1, car.speed / 400)); }
     else if(!gas)car.speed-=COAST*dt;
   }
 
-  // Grass drag — gentler
+  // Aero drag grows with the cube of speed: barely noticeable at cruising pace,
+  // but strong near the top so holding max speed demands a clean straight.
+  car.speed-=SPEED_DRAG*Math.pow(car.speed/MAX_ROAD,3)*dt;
+
   if(!car.onRoad)car.speed*=(1-GRASS_DRAG*dt);
   car.speed=Math.max(0,Math.min(MAX_ROAD,car.speed));
 
@@ -820,13 +840,11 @@ function update(ts){
   const sr=STEER*(0.35+1.2*(1-sf));
   if(!finished){
     if (brake && lastSteerDir !== 0 && car.speed > 50) {
-      // Auto-drift when braking (scales purely by speed factor 'sf')
-      const driftRate = STEER * sf * 0.6; // Drops to almost zero at low speeds
+      const driftRate = STEER * sf * 0.6;
       car.angle += lastSteerDir * driftRate * dt;
-      car.steerVisual = lastSteerDir * 0.5; // visibly turn wheels more
+      car.steerVisual = lastSteerDir * 0.5;
     } else {
       car.angle+=(goL?-1:goR?1:0)*sr*dt;
-      // small wobble on reversal
       const wobble=steerReverseTimer>0?Math.sin(steerReverseTimer*80)*0.08:0;
       car.steerVisual=(goL?-1:goR?1:0)*Math.abs(sr/STEER)*0.5+wobble;
     }
@@ -836,14 +854,16 @@ function update(ts){
   car.y+=Math.sin(car.angle)*car.speed*dt;
 
   let candidates=[];
-  for(let i=0;i<allTiles.length;i++){
+  const near=nearbyTileIndices(car.x,car.y);
+  for(let n=0;n<near.length;n++){
+    const i=near[n];
     const t=allTiles[i];
     if(Math.hypot(car.x-t.cx,car.y-t.cy)<R+5 && inHex(car.x,car.y,t.cx,t.cy)) candidates.push(i);
   }
 
   let physIdx=-1;
   if(candidates.length>0){
-    physIdx=candidates[0]; // fallback
+    physIdx=candidates[0];
     let tCand=candidates.filter(c=>!allTiles[c].isDeco);
     if(tCand.length>0){
       const curTI=car.trackIdx;
@@ -889,7 +909,6 @@ function update(ts){
     const mAD=(cT.isNarrow?ROAD_W*0.45:ROAD_W)/2;
     car.onRoad=maxWDist<=mAD+5;
 
-    // Grass dust from rear wheels
     if(!car.onRoad&&car.speed>80&&Math.random()<0.5){
       const _dx=Math.cos(car.angle+Math.PI/2),_dy=Math.sin(car.angle+Math.PI/2);
       const _rx=Math.cos(car.angle)*-CAR_REAR_AXLE,_ry=Math.sin(car.angle)*-CAR_REAR_AXLE;
@@ -906,7 +925,6 @@ function update(ts){
     }
   }
 
-  // Skid marks
   if(car.onRoad&&!finished&&car.isBraking&&car.speed>10){
     const dx=Math.cos(car.angle+Math.PI/2),dy=Math.sin(car.angle+Math.PI/2);
     const rX=Math.cos(car.angle)*(-CAR_REAR_AXLE),rY=Math.sin(car.angle)*(-CAR_REAR_AXLE);
@@ -919,7 +937,6 @@ function update(ts){
   if(raceStart===0&&car.speed>15)raceStart=ts;
   if(raceStart>0&&!finished)raceTime=ts-raceStart;
 
-  // Finish
   if(!car.falling&&!finished){
     const lastT=trackTiles[trackTiles.length-1];
     const onLast=Math.hypot(car.x-lastT.cx,car.y-lastT.cy)<APOTHEM;
@@ -931,7 +948,6 @@ function update(ts){
     }
   }
 
-  // Camera
   let dA=car.angle-cam.angle;
   while(dA>Math.PI)dA-=Math.PI*2;while(dA<-Math.PI)dA+=Math.PI*2;
   cam.angle+=dA*CAM_ANGLE_LERP;
@@ -967,8 +983,7 @@ function drawSkidMarks(){
     ctx.beginPath();ctx.strokeStyle='rgba(0,0,0,0.7)';
     let last=null;
     for(const m of car.skidMarks){
-      if(m.wheel!==side) continue; 
-      
+      if(m.wheel!==side) continue;
       if(!last || last.id !== m.id) ctx.moveTo(m.p1.x,m.p1.y);
       else ctx.lineTo(m.p1.x,m.p1.y);
       last=m;
@@ -981,7 +996,6 @@ function drawTrail(){
   ctx.beginPath();let dr=false;
   for(let i=1;i<car.trail.length;i++){
     const a=car.trail[i-1],b=car.trail[i];
-    
     if(!dr){ctx.moveTo(a.x,a.y);dr=true;}ctx.lineTo(b.x,b.y);
   }
   ctx.strokeStyle='rgba(255,50,0,0.5)';ctx.lineWidth=4;ctx.lineCap='round';ctx.stroke();
@@ -1030,11 +1044,9 @@ function drawLayer(){
   const half=TSIZE/2;
   const cullR=(Math.max(cv.width,cv.height)/cam.zoom)*1.8;
   for(const t of allTiles){
-    
     if(Math.hypot(t.cx-cam.x,t.cy-cam.y)>cullR)continue;
     const _rt=renderTile(t);if(!_rt)continue;ctx.save();ctx.translate(t.cx,t.cy);ctx.drawImage(_rt,-half,-half);
     if(t.visited&&!t.isDeco){
-      // Draw the yellow visited marker inside the tile so it doesn't slip under adjacent tiles
       const rVis = R - 10;
       ctx.beginPath();for(let i=0;i<6;i++)i===0?ctx.moveTo(rVis*Math.cos(Math.PI/3*i),rVis*Math.sin(Math.PI/3*i)):ctx.lineTo(rVis*Math.cos(Math.PI/3*i),rVis*Math.sin(Math.PI/3*i));
       ctx.closePath();ctx.strokeStyle='rgba(255,204,0,0.8)';ctx.lineWidth=16;ctx.stroke();
@@ -1067,8 +1079,19 @@ function drawCar(){
 function drawScene(){
   drawBackground();
   if(!car||car.x===undefined)return;
+  // Speed factor 0..1. Effects are reserved for the genuinely-fast top band:
+  // normal cruising sits near 0.8, so shake only appears past ~0.85.
+  const spd=Math.max(0,Math.min(1,car.speed/MAX_ROAD));
+  const intensity=Math.max(0,(spd-0.85)/0.15); // 0 below 85%, ramps to 1 at max
+  // Subtle screen shake scaled by speed (and stronger on grass for roughness).
+  let shakeX=0, shakeY=0;
+  if(intensity>0 && !car.falling){
+    const mag=intensity*(car.onRoad?4:7);
+    shakeX=(Math.random()-0.5)*mag;
+    shakeY=(Math.random()-0.5)*mag;
+  }
   ctx.save();
-  ctx.translate(cv.width/2,cv.height*0.55);
+  ctx.translate(cv.width/2+shakeX,cv.height*0.55+shakeY);
   ctx.rotate(-cam.angle-Math.PI/2);
   ctx.scale(cam.zoom,cam.zoom);
   ctx.translate(-cam.x,-cam.y);
@@ -1078,8 +1101,17 @@ function drawScene(){
   drawParticles();
   drawCar();
   ctx.restore();
+  // Speed vignette: darken/tint the screen edges as you approach top speed.
+  if(intensity>0.02 && !car.falling){
+    const vg=ctx.createRadialGradient(
+      cv.width/2,cv.height*0.55,Math.min(cv.width,cv.height)*0.35,
+      cv.width/2,cv.height*0.55,Math.max(cv.width,cv.height)*0.75);
+    vg.addColorStop(0,'rgba(0,0,0,0)');
+    vg.addColorStop(1,`rgba(0,0,0,${0.35*intensity})`);
+    ctx.fillStyle=vg;
+    ctx.fillRect(0,0,cv.width,cv.height);
+  }
 }
-
 
 let tilePopupTimer = null;
 function showTilePopup(time, speed) {
@@ -1105,11 +1137,16 @@ function showTilePopup(time, speed) {
   }, 1000);
 }
 
+let _hudLastTime='', _hudLastVis=-1, _hudLastTotal=-1;
 function updHUD(){
-  document.getElementById('hT').textContent=fmt(raceTime);
+  const tStr=fmt(raceTime);
+  if(tStr!==_hudLastTime){ document.getElementById('hT').textContent=tStr; _hudLastTime=tStr; }
   if(trackTiles&&trackTiles.length){
     const vis=trackTiles.filter(t=>t.visited).length;
-    document.getElementById('hHex').innerHTML=`<span style='color:${vis===trackTiles.length?'#00ff00':'#ccc'}'>${vis}</span> / ${trackTiles.length}`;
+    if(vis!==_hudLastVis||trackTiles.length!==_hudLastTotal){
+      document.getElementById('hHex').innerHTML=`<span style='color:${vis===trackTiles.length?'#00ff00':'#ccc'}'>${vis}</span> / ${trackTiles.length}`;
+      _hudLastVis=vis; _hudLastTotal=trackTiles.length;
+    }
   }
 }
 let flT=null;
@@ -1128,7 +1165,7 @@ function showFinish(){
   let nextBtn='';
   if(currentLevelIdx+1<LEVEL_DATA.length&&stars>=1)
     nextBtn=`<button class="ob" onclick="loadLevel(${currentLevelIdx+1})">NEXT LEVEL</button>`;
-  const starHtml='★'.repeat(stars)+'<span style="color:#333;">'+'&#9734;'.repeat(3-stars)+'</span>';
+  const starHtml='\u2605'.repeat(stars)+'<span style="color:#333;">'+'\u2606'.repeat(3-stars)+'</span>';
   const nextTarget=stars===0?t1:stars===1?t2:stars===2?t3:null;
   const hintHtml=nextTarget
     ?`<div style="font-size:15px;color:#aaa;margin-bottom:16px;">Next star target: ${fmt(nextTarget)}</div>`
@@ -1155,7 +1192,7 @@ function loop(ts){
     drawScene();
   } else if(state==='menu'){
     if(trackTiles&&trackTiles.length>0 && cam){
-      cam.x+=0.5; cam.y-=0.3; // slowly pan
+      cam.x+=0.5; cam.y-=0.3;
       drawBackground();
       ctx.save();
       ctx.translate(cv.width/2,cv.height/2);
