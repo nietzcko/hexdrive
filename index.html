@@ -128,10 +128,11 @@ const CAR_REAR_AXLE   = CAR_L * 0.32;
 const MAX_ROAD = 900;
 const MAX_HEX  = 280;
 const ACCEL    = 820;
-const BRAKE    = 2000;
+const BRAKE    = 1500;
+const BRAKE_ATTACK = 0.30;  // seconds for braking to reach full force (soft onset)
 const COAST    = 140;
 const SPEED_DRAG = 110;   // cubic aero-style drag: negligible at low speed, bites hard near the top
-const STEER    = 1.5;
+const STEER    = 1.1;
 
 const STEER_PENALTY = 60;
 const GRASS_DRAG = 1.5;
@@ -166,6 +167,23 @@ const LEVEL_THEMES = ['grass','grass','grass','grass','grass','desert','desert',
 let savedRecords = Array(LEVEL_DATA.length).fill(null);
 try{ const s=localStorage.getItem('hexRacerRecords_v3');if(s)savedRecords=JSON.parse(s); }catch(e){}
 function saveRecords(){ try{ localStorage.setItem('hexRacerRecords_v3',JSON.stringify(savedRecords)); }catch(e){} }
+
+// GHOSTS — the best run on each track, replayed alongside you.
+// Poses are sampled at a fixed interval so playback can be indexed directly by
+// race time, which keeps the ghost perfectly in sync with your own clock.
+const GHOST_DT   = 50;    // ms between recorded samples (20 samples/sec)
+const GHOST_MAX  = 6000;  // safety cap (~5 minutes) so a stuck run can't grow forever
+let savedGhosts = Array(LEVEL_DATA.length).fill(null);
+try{ const g=localStorage.getItem('hexRacerGhosts_v1'); if(g)savedGhosts=JSON.parse(g); }catch(e){}
+function saveGhosts(){
+  try{ localStorage.setItem('hexRacerGhosts_v1',JSON.stringify(savedGhosts)); }
+  catch(e){ /* quota exceeded — keep playing without persisting the ghost */ }
+}
+// Live recording of the current attempt: flat [x,y,angle, x,y,angle, ...]
+let ghostRec=[];
+// The ghost being replayed this run (null if no record yet on this track)
+let ghostPlay=null;
+let ghostPose=null; // {x,y,angle} resolved for the current frame
 
 let SEQ=[], currentLevelIdx=0, totalCPs=0;
 let _finishFrameDone=false;
@@ -676,6 +694,35 @@ function drawParticles(){
 }
 
 // GAME ENGINE
+
+// Record the current pose into the run's ghost track. Samples are index-aligned
+// to race time: we fill any gap so sample N always represents t = N*GHOST_DT.
+function ghostRecord(){
+  const needed=Math.floor(raceTime/GHOST_DT)+1;
+  let have=ghostRec.length/3;
+  while(have<needed && have<GHOST_MAX){
+    ghostRec.push(Math.round(car.x),Math.round(car.y),Math.round(car.angle*1000)/1000);
+    have++;
+  }
+}
+// Resolve the ghost's pose at the current race time, interpolating between samples.
+function ghostUpdate(){
+  if(!ghostPlay||ghostPlay.length<3){ ghostPose=null; return; }
+  const n=ghostPlay.length/3;
+  const pos=raceTime/GHOST_DT;
+  let i0=Math.floor(pos);
+  let f=pos-i0;
+  if(i0>=n-1){ i0=n-1; f=0; }   // ghost finished: hold its final pose
+  const i1=Math.min(i0+1,n-1);
+  const x0=ghostPlay[i0*3],   y0=ghostPlay[i0*3+1], a0=ghostPlay[i0*3+2];
+  const x1=ghostPlay[i1*3],   y1=ghostPlay[i1*3+1], a1=ghostPlay[i1*3+2];
+  // Interpolate the heading the short way around the circle
+  let da=a1-a0;
+  while(da>Math.PI)da-=Math.PI*2;
+  while(da<-Math.PI)da+=Math.PI*2;
+  ghostPose={x:x0+(x1-x0)*f, y:y0+(y1-y0)*f, angle:a0+da*f, done:i0>=n-1};
+}
+
 let car={},cam={};
 let state='menu',raceStart=0,raceTime=0,finished=false,isNewRecord=false;
 let prevCarX=0,prevCarY=0;
@@ -775,10 +822,16 @@ function resetGame(){
   const st=trackTiles[0],em=edgeMid(st.cx,st.cy,st.exit),em0=edgeMid(st.cx,st.cy,st.entry);
   car={x:st.cx,y:st.cy,angle:Math.atan2(em.y-em0.y,em.x-em0.x),
     speed:0,trail:[],skidMarks:[],falling:false,fallAlpha:1,
-    trackIdx:0,onHex:true,onRoad:true,steerVisual:0};
+    trackIdx:0,onHex:true,onRoad:true,steerVisual:0,brakeRamp:0};
   prevCarX=car.x;prevCarY=car.y;
   cam={x:car.x,y:car.y,angle:car.angle,zoom:ZOOM_BASE};
   particles=[];lastSteerDir=0;steerReverseTimer=0;
+  // Ghost: clear this attempt's recording and arm the saved best for replay.
+  ghostRec=[];
+  ghostPlay=savedGhosts[currentLevelIdx]||null;
+  ghostPose=ghostPlay&&ghostPlay.length>=3
+    ? {x:ghostPlay[0],y:ghostPlay[1],angle:ghostPlay[2],done:false}
+    : null;
   raceStart=0;raceTime=0;finished=false;isNewRecord=false;updHUD();
 }
 
@@ -820,12 +873,19 @@ function update(ts){
   if(curSteer!==0)lastSteerDir=curSteer;
   if(steerReverseTimer>0)steerReverseTimer-=dt;
 
+  // Brake attack envelope: the brake eases in over BRAKE_ATTACK rather than
+  // slamming on the instant you release, so a brief lift barely costs speed and
+  // the transition off the gas doesn't feel like the car snagged on something.
+  if(car.isBraking) car.brakeRamp=Math.min(1,(car.brakeRamp||0)+dt/BRAKE_ATTACK);
+  else car.brakeRamp=0;
+  const brakeCurve=(car.brakeRamp||0)*(car.brakeRamp||0); // squared = soft initial bite
+
   if(finished){car.speed-=200*dt;car.steerVisual*=0.85;}
   else{
     // Engine force tapers as you approach the top, so acceleration is snappy off
     // the line but the last stretch of speed has to be worked for.
     if(gas)car.speed+=ACCEL*(1-car.speed/MAX_ROAD)*dt;
-    if(car.isBraking){ car.speed -= BRAKE * dt * Math.max(0.1, Math.min(1, car.speed / 400)); }
+    if(car.isBraking){ car.speed -= BRAKE * brakeCurve * dt * Math.max(0.1, Math.min(1, car.speed / 400)); }
     else if(!gas)car.speed-=COAST*dt;
   }
 
@@ -837,12 +897,13 @@ function update(ts){
   car.speed=Math.max(0,Math.min(MAX_ROAD,car.speed));
 
   const sf=car.speed/MAX_ROAD;
-  const sr=STEER*(0.35+1.2*(1-sf));
+  const sr=STEER*(0.6+0.6*(1-sf));
   if(!finished){
     if (brake && lastSteerDir !== 0 && car.speed > 50) {
-      const driftRate = STEER * sf * 0.6;
+      // Drift eases in on the same envelope so the rotation doesn't snap either
+      const driftRate = STEER * sf * 0.6 * brakeCurve;
       car.angle += lastSteerDir * driftRate * dt;
-      car.steerVisual = lastSteerDir * 0.5;
+      car.steerVisual = lastSteerDir * 0.5 * Math.max(0.35, brakeCurve);
     } else {
       car.angle+=(goL?-1:goR?1:0)*sr*dt;
       const wobble=steerReverseTimer>0?Math.sin(steerReverseTimer*80)*0.08:0;
@@ -925,7 +986,9 @@ function update(ts){
     }
   }
 
-  if(car.onRoad&&!finished&&car.isBraking&&car.speed>10){
+  // Only lay rubber once the brake has actually bitten, so a light lift of the
+  // finger doesn't paint skid marks the physics isn't producing.
+  if(car.onRoad&&!finished&&car.isBraking&&car.brakeRamp>0.35&&car.speed>10){
     const dx=Math.cos(car.angle+Math.PI/2),dy=Math.sin(car.angle+Math.PI/2);
     const rX=Math.cos(car.angle)*(-CAR_REAR_AXLE),rY=Math.sin(car.angle)*(-CAR_REAR_AXLE);
     car.skidMarks.push({p1:{x:car.x+rX+dx*CAR_REAR_TRACK/2,y:car.y+rY+dy*CAR_REAR_TRACK/2},wheel:'l',id:car.skidId});
@@ -937,12 +1000,23 @@ function update(ts){
   if(raceStart===0&&car.speed>15)raceStart=ts;
   if(raceStart>0&&!finished)raceTime=ts-raceStart;
 
+  // Ghost: record this attempt and advance the replay. Both are driven by
+  // raceTime, so the ghost leaves the line at the exact moment you do.
+  if(raceStart>0&&!finished&&!car.falling)ghostRecord();
+  ghostUpdate();
+
   if(!car.falling&&!finished){
     const lastT=trackTiles[trackTiles.length-1];
     const onLast=Math.hypot(car.x-lastT.cx,car.y-lastT.cy)<APOTHEM;
     if(onLast&&trackTiles.every(t=>t.visited)){
       finished=true;
-      if(!savedRecords[currentLevelIdx]||raceTime<savedRecords[currentLevelIdx]){savedRecords[currentLevelIdx]=raceTime;saveRecords();isNewRecord=true;}
+      if(!savedRecords[currentLevelIdx]||raceTime<savedRecords[currentLevelIdx]){
+        savedRecords[currentLevelIdx]=raceTime;saveRecords();isNewRecord=true;
+        // A record run becomes the new ghost for this track.
+        ghostRecord(); // capture the final moment
+        savedGhosts[currentLevelIdx]=ghostRec.slice();
+        saveGhosts();
+      }
       doFlash(isNewRecord?'NEW RECORD!':'FINISH!','#00ffcc');
       setTimeout(showFinish, 500);
     }
@@ -1001,11 +1075,11 @@ function drawTrail(){
   ctx.strokeStyle='rgba(255,50,0,0.5)';ctx.lineWidth=4;ctx.lineCap='round';ctx.stroke();
 }
 
-function drawCarBody(){
+function drawCarBody(isGhost){
   const L=CAR_L,W=CAR_W,flW=32,flL=L*0.6;
   ctx.save();ctx.translate(5,5);ctx.globalAlpha*=0.4;
   ctx.fillStyle='#000';ctx.beginPath();ctx.roundRect(-flW/2,-L*0.2,flW,flL,3);ctx.fill();
-  if(car.isBraking) {
+  if(!isGhost && car.isBraking) {
     ctx.fillStyle='rgba(255,50,50,0.9)';ctx.beginPath();
     ctx.arc(-W*0.6,-L*0.45,4,0,Math.PI*2);
     ctx.arc(W*0.6,-L*0.45,4,0,Math.PI*2);
@@ -1055,6 +1129,39 @@ function drawLayer(){
   }
 }
 
+// The ghost: your best run on this track, translucent and tinted so it never
+// gets confused with the car you're driving.
+function drawGhost(){
+  if(!ghostPose)return;
+  const gx=ghostPose.x, gy=ghostPose.y, ga=ghostPose.angle;
+  const dx=Math.cos(ga+Math.PI/2),dy=Math.sin(ga+Math.PI/2);
+  const fx=Math.cos(ga)*CAR_FRONT_AXLE,fy=Math.sin(ga)*CAR_FRONT_AXLE;
+  const rx=Math.cos(ga)*(-CAR_REAR_AXLE),ry=Math.sin(ga)*(-CAR_REAR_AXLE);
+  ctx.save();
+  // Fade further once the ghost has crossed the line and is just parked there.
+  ctx.globalAlpha=ghostPose.done?0.22:0.45;
+  // Cyan glow beneath so the ghost reads instantly as "not you"
+  const glow=ctx.createRadialGradient(gx,gy,0,gx,gy,CAR_L*0.85);
+  glow.addColorStop(0,'rgba(0,220,255,0.55)');
+  glow.addColorStop(1,'rgba(0,220,255,0)');
+  ctx.fillStyle=glow;
+  ctx.beginPath();ctx.arc(gx,gy,CAR_L*0.85,0,Math.PI*2);ctx.fill();
+  const wh=[
+    {x:gx+fx+dx*CAR_FRONT_TRACK/2,y:gy+fy+dy*CAR_FRONT_TRACK/2},
+    {x:gx+fx-dx*CAR_FRONT_TRACK/2,y:gy+fy-dy*CAR_FRONT_TRACK/2},
+    {x:gx+rx+dx*CAR_REAR_TRACK/2,y:gy+ry+dy*CAR_REAR_TRACK/2},
+    {x:gx+rx-dx*CAR_REAR_TRACK/2,y:gy+ry-dy*CAR_REAR_TRACK/2}
+  ];
+  for(const w of wh){
+    ctx.save();ctx.translate(w.x,w.y);ctx.rotate(ga+Math.PI/2);
+    ctx.fillStyle='#0a2a33';
+    ctx.beginPath();ctx.roundRect(-5,-8,10,17,2);ctx.fill();ctx.restore();
+  }
+  ctx.translate(gx,gy);ctx.rotate(ga+Math.PI/2);
+  drawCarBody(true);
+  ctx.restore();
+}
+
 function drawCar(){
   const wRot=car.angle+car.steerVisual;
   const dx=Math.cos(car.angle+Math.PI/2),dy=Math.sin(car.angle+Math.PI/2);
@@ -1079,14 +1186,15 @@ function drawCar(){
 function drawScene(){
   drawBackground();
   if(!car||car.x===undefined)return;
-  // Speed factor 0..1. Effects are reserved for the genuinely-fast top band:
-  // normal cruising sits near 0.8, so shake only appears past ~0.85.
-  const spd=Math.max(0,Math.min(1,car.speed/MAX_ROAD));
-  const intensity=Math.max(0,(spd-0.85)/0.15); // 0 below 85%, ramps to 1 at max
+  // Speed effects keyed to actual km/h, not the raw MAX_ROAD ceiling (which is
+  // never reached). Shake starts at ~155 km/h and hits full near the ~185 top,
+  // so it's clearly visible whenever you're genuinely flying.
+  const kmh=car.speed*(200/900);
+  const intensity=Math.max(0,Math.min(1,(kmh-155)/30));
   // Subtle screen shake scaled by speed (and stronger on grass for roughness).
   let shakeX=0, shakeY=0;
   if(intensity>0 && !car.falling){
-    const mag=intensity*(car.onRoad?4:7);
+    const mag=intensity*(car.onRoad?6:10);
     shakeX=(Math.random()-0.5)*mag;
     shakeY=(Math.random()-0.5)*mag;
   }
@@ -1099,6 +1207,7 @@ function drawScene(){
   if(car.trail.length>1&&!car.falling)drawTrail();
   if(!car.falling)drawSkidMarks();
   drawParticles();
+  drawGhost();
   drawCar();
   ctx.restore();
   // Speed vignette: darken/tint the screen edges as you approach top speed.
@@ -1213,6 +1322,10 @@ function clearPRs(){
   if(confirm('Are you sure you want to clear all records?')){
     savedRecords=Array(LEVEL_DATA.length).fill(null);
     try{ localStorage.removeItem('hexRacerRecords_v3'); }catch(e){}
+    // Ghosts are the record runs, so they go with them.
+    savedGhosts=Array(LEVEL_DATA.length).fill(null);
+    ghostPlay=null; ghostPose=null; ghostRec=[];
+    try{ localStorage.removeItem('hexRacerGhosts_v1'); }catch(e){}
     initMenu();
   }
 }
