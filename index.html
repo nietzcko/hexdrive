@@ -103,10 +103,13 @@ if (!CanvasRenderingContext2D.prototype.roundRect) {
 // CONFIG
 const R       = 1020;
 const ROAD_W  = 420;
-const STAR3_TIMES = [18000, 22000, 25000, 22000, 20000, 25000, 28000, 25000, 45000, 45000];
+// Calibrated against the current handling: each 3-star target is ~15% off the
+// best achievable clean run on that track. Margins are proportional rather than
+// fixed seconds, so the gap between stars stays meaningful on the long tracks.
+const STAR3_TIMES = [10500, 20000, 26000, 24500, 26500, 28000, 31500, 33000, 55500, 87500];
 const getStarTimes = (idx) => {
   const t3 = STAR3_TIMES[idx] || 20000;
-  return [t3 + 5000, t3 + 2000, t3];
+  return [Math.round(t3*1.20), Math.round(t3*1.08), t3];
 };
 
 const calcStars = (idx, time) => {
@@ -133,6 +136,11 @@ const BRAKE_ATTACK = 0.30;  // seconds for braking to reach full force (soft ons
 const COAST    = 140;
 const SPEED_DRAG = 110;   // cubic aero-style drag: negligible at low speed, bites hard near the top
 const STEER    = 1.1;
+// Handling: the faster you go, the wider the car turns, so you release and slow
+// down to tighten your line into a corner. Arcs are deliberately lazy — roughly
+// 240 units at 60km/h widening to ~1100 at full pace.
+const STEER_BASE = 0.6;  // rate multiplier still available at top speed
+const STEER_SLOW = 0.6;  // extra rate gained as speed drops
 
 const STEER_PENALTY = 60;
 const GRASS_DRAG = 1.5;
@@ -897,17 +905,21 @@ function update(ts){
   car.speed=Math.max(0,Math.min(MAX_ROAD,car.speed));
 
   const sf=car.speed/MAX_ROAD;
-  const sr=STEER*(0.6+0.6*(1-sf));
+  // Turn rate falls as speed rises, so the cornering arc widens with pace. You
+  // have to release and slow down to tighten your line into a corner.
+  const sr=STEER*(STEER_BASE+STEER_SLOW*(1-sf));
+  const steerIn=goL?-1:goR?1:0;
   if(!finished){
     if (brake && lastSteerDir !== 0 && car.speed > 50) {
-      // Drift eases in on the same envelope so the rotation doesn't snap either
+      // Releasing does double duty: it slows you (which tightens your arc) and
+      // drifts the nose around, which is how corners actually get taken.
       const driftRate = STEER * sf * 0.6 * brakeCurve;
       car.angle += lastSteerDir * driftRate * dt;
       car.steerVisual = lastSteerDir * 0.5 * Math.max(0.35, brakeCurve);
     } else {
-      car.angle+=(goL?-1:goR?1:0)*sr*dt;
+      car.angle+=steerIn*sr*dt;
       const wobble=steerReverseTimer>0?Math.sin(steerReverseTimer*80)*0.08:0;
-      car.steerVisual=(goL?-1:goR?1:0)*Math.abs(sr/STEER)*0.5+wobble;
+      car.steerVisual=steerIn*Math.abs(sr/STEER)*0.5+wobble;
     }
   }
 
@@ -1194,7 +1206,7 @@ function drawScene(){
   // Subtle screen shake scaled by speed (and stronger on grass for roughness).
   let shakeX=0, shakeY=0;
   if(intensity>0 && !car.falling){
-    const mag=intensity*(car.onRoad?6:10);
+    const mag=intensity*(car.onRoad?2.5:4);
     shakeX=(Math.random()-0.5)*mag;
     shakeY=(Math.random()-0.5)*mag;
   }
