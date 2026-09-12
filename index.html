@@ -340,6 +340,7 @@ function buildTrack(){
   }
   allTiles=[...waterTiles,...decoTiles,...trackTiles];
   buildSpatialGrid();
+  buildOpponentLine();
 }
 
 // Spatial grid: bucket tiles by coarse world cells so collision only tests
@@ -839,6 +840,7 @@ function resetGame(){
   particles=[];lastSteerDir=0;steerReverseTimer=0;
   // Ghost: clear this attempt's recording and arm the saved best for replay.
   ghostRec=[];
+  oppPoses=[];
   ghostPlay=savedGhosts[currentLevelIdx]||null;
   ghostPose=ghostPlay&&ghostPlay.length>=3
     ? {x:ghostPlay[0],y:ghostPlay[1],angle:ghostPlay[2],done:false}
@@ -1019,6 +1021,7 @@ function update(ts){
   // raceTime, so the ghost leaves the line at the exact moment you do.
   if(raceStart>0&&!finished&&!car.falling)ghostRecord();
   ghostUpdate();
+  oppUpdate();
 
   if(!car.falling&&!finished){
     const lastT=trackTiles[trackTiles.length-1];
@@ -1090,8 +1093,80 @@ function drawTrail(){
   ctx.strokeStyle='rgba(255,50,0,0.5)';ctx.lineWidth=4;ctx.lineCap='round';ctx.stroke();
 }
 
-function drawCarBody(isGhost){
+// OPPONENTS — rivals that run the track at exactly the 1/2/3-star paces, so the
+// star targets become something you can see and race rather than just a number.
+const OPPONENTS = [
+  {tier:3, label:'\u2605\u2605\u2605', body:'#d4af37', accent:'#8a6d1f'}, // gold
+  {tier:2, label:'\u2605\u2605',      body:'#b8c0c8', accent:'#7d848a'}, // silver
+  {tier:1, label:'\u2605',            body:'#c87941', accent:'#8a5028'}  // bronze
+];
+const OPP_ACCEL_T = 1.2;  // seconds they take to wind up to pace (matches the car roughly)
+// The line they follow: the player's own effective route. They start at the first
+// tile's centre (where you start) and their finish is the moment they enter the
+// last tile (which is exactly when your race stops).
+let oppLine=null;      // {xs, ys, cum, total}
+let oppPoses=[];       // resolved poses for the current frame
+
+function buildOpponentLine(){
+  const xs=[], ys=[];
+  if(!trackTiles.length){ oppLine=null; return; }
+  const last=trackTiles.length-1;
+  // First tile: from its centre out to the exit edge (you start at the centre)
+  {
+    const bz=getWorldBezier(trackTiles[0]);
+    for(let i=20;i<=40;i++){ const p=bezPt(i/40,bz.p0,bz.cp1,bz.cp2,bz.p3); xs.push(p.x); ys.push(p.y); }
+  }
+  // Middle tiles in full. The last tile is excluded: arriving at its entry edge
+  // already triggers the finish.
+  for(let t=1;t<last;t++){
+    const bz=getWorldBezier(trackTiles[t]);
+    for(let i=1;i<=40;i++){ const p=bezPt(i/40,bz.p0,bz.cp1,bz.cp2,bz.p3); xs.push(p.x); ys.push(p.y); }
+  }
+  const n=xs.length;
+  const cum=new Float64Array(n);
+  for(let i=1;i<n;i++) cum[i]=cum[i-1]+Math.hypot(xs[i]-xs[i-1],ys[i]-ys[i-1]);
+  oppLine={xs,ys,cum,total:cum[n-1]||1};
+}
+
+// Distance covered by a rival at time t given it must cover `total` in `target` ms.
+// Linear wind-up for OPP_ACCEL_T, then constant pace, solved so it lands exactly on time.
+function oppDistance(tSec, target, total){
+  const T=target/1000;
+  const Ta=Math.min(OPP_ACCEL_T, T*0.5);
+  const vmax=total/(T-Ta/2);
+  if(tSec<=0) return 0;
+  if(tSec<Ta) return vmax*tSec*tSec/(2*Ta);
+  return vmax*Ta/2 + vmax*(tSec-Ta);
+}
+
+function oppUpdate(){
+  oppPoses=[];
+  if(!oppLine||state!=='racing'&&state!=='finish')return;
+  const times=getStarTimes(currentLevelIdx); // [t1, t2, t3]
+  const {xs,ys,cum,total}=oppLine;
+  const n=xs.length;
+  for(const o of OPPONENTS){
+    const target=o.tier===3?times[2]:o.tier===2?times[1]:times[0];
+    const d=oppDistance(raceTime/1000, target, total);
+    const done=d>=total;
+    const dd=Math.min(d,total);
+    // binary search the cumulative table for this distance
+    let lo=0, hi=n-1;
+    while(lo<hi-1){ const mid=(lo+hi)>>1; if(cum[mid]<=dd) lo=mid; else hi=mid; }
+    const seg=cum[hi]-cum[lo];
+    const f=seg>0?(dd-cum[lo])/seg:0;
+    const x=xs[lo]+(xs[hi]-xs[lo])*f;
+    const y=ys[lo]+(ys[hi]-ys[lo])*f;
+    // heading from the local tangent
+    const i2=Math.min(n-1,hi+1), i1=Math.max(0,lo-1);
+    const angle=Math.atan2(ys[i2]-ys[i1], xs[i2]-xs[i1]);
+    oppPoses.push({x,y,angle,done,label:o.label,body:o.body,accent:o.accent,tier:o.tier});
+  }
+}
+
+function drawCarBody(isGhost, bodyCol, accentCol){
   const L=CAR_L,W=CAR_W,flW=32,flL=L*0.6;
+  const BODY=bodyCol||'#cc0022', ACCENT=accentCol||'#880011';
   ctx.save();ctx.translate(5,5);ctx.globalAlpha*=0.4;
   ctx.fillStyle='#000';ctx.beginPath();ctx.roundRect(-flW/2,-L*0.2,flW,flL,3);ctx.fill();
   if(!isGhost && car.isBraking) {
@@ -1110,21 +1185,21 @@ function drawCarBody(isGhost){
   ctx.moveTo(-W*0.5,L*0.35);ctx.lineTo(-CAR_REAR_TRACK/2,CAR_REAR_AXLE);
   ctx.moveTo(W*0.5,L*0.35);ctx.lineTo(CAR_REAR_TRACK/2,CAR_REAR_AXLE);ctx.stroke();
   ctx.fillStyle='#111';ctx.fillRect(-W*1.8,-L*0.85,W*3.6,L*0.12);
-  ctx.fillStyle='#cc0022';ctx.fillRect(-W*1.7,-L*0.83,W*3.4,L*0.06);
+  ctx.fillStyle=BODY;ctx.fillRect(-W*1.7,-L*0.83,W*3.4,L*0.06);
   ctx.fillStyle='#111';ctx.fillRect(-W*1.6,L*0.45,W*3.2,L*0.15);
-  ctx.fillStyle='#cc0022';ctx.fillRect(-W*1.5,L*0.48,W*3.0,L*0.08);
-  ctx.fillStyle='#cc0022';ctx.beginPath();
+  ctx.fillStyle=BODY;ctx.fillRect(-W*1.5,L*0.48,W*3.0,L*0.08);
+  ctx.fillStyle=BODY;ctx.beginPath();
   ctx.moveTo(0,-L*0.85);ctx.lineTo(W*0.3,-L*0.6);ctx.lineTo(W*0.5,-L*0.2);ctx.lineTo(W*1.1,0);
   ctx.lineTo(W*0.8,L*0.3);ctx.lineTo(W*0.3,L*0.48);ctx.lineTo(-W*0.3,L*0.48);ctx.lineTo(-W*0.8,L*0.3);
   ctx.lineTo(-W*1.1,0);ctx.lineTo(-W*0.5,-L*0.2);ctx.lineTo(-W*0.3,-L*0.6);ctx.closePath();ctx.fill();
-  ctx.fillStyle='#880011';
+  ctx.fillStyle=ACCENT;
   ctx.beginPath();ctx.moveTo(W*0.5,-L*0.1);ctx.lineTo(W,0);ctx.lineTo(W*0.7,L*0.25);ctx.closePath();ctx.fill();
   ctx.beginPath();ctx.moveTo(-W*0.5,-L*0.1);ctx.lineTo(-W,0);ctx.lineTo(-W*0.7,L*0.25);ctx.closePath();ctx.fill();
   ctx.fillStyle='#111';ctx.beginPath();ctx.ellipse(W*0.7,-L*0.05,W*0.3,L*0.05,0,0,Math.PI*2);ctx.fill();
   ctx.beginPath();ctx.ellipse(-W*0.7,-L*0.05,W*0.3,L*0.05,0,0,Math.PI*2);ctx.fill();
   ctx.fillStyle='#050505';ctx.beginPath();ctx.ellipse(0,-L*0.05,W*0.4,L*0.18,0,0,Math.PI*2);ctx.fill();
   ctx.fillStyle='#ffee00';ctx.beginPath();ctx.arc(0,-L*0.05,W*0.25,0,Math.PI*2);ctx.fill();
-  ctx.strokeStyle='#aa0011';ctx.lineWidth=2.5;ctx.beginPath();ctx.ellipse(0,-L*0.05,W*0.45,L*0.22,0,-Math.PI/4,Math.PI+Math.PI/4);ctx.stroke();
+  ctx.strokeStyle=ACCENT;ctx.lineWidth=2.5;ctx.beginPath();ctx.ellipse(0,-L*0.05,W*0.45,L*0.22,0,-Math.PI/4,Math.PI+Math.PI/4);ctx.stroke();
   ctx.fillStyle='#fff';ctx.font=`bold ${CAR_W*0.9}px Courier New`;ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.save();ctx.translate(0,L*0.25);ctx.fillText(String(currentLevelIdx+1),0,0);ctx.restore();
 }
@@ -1177,6 +1252,46 @@ function drawGhost(){
   ctx.restore();
 }
 
+// Rivals running the star paces. Drawn solid (they're real competitors, unlike
+// the translucent ghost) with a tier-coloured body and a star tag above.
+function drawOpponents(){
+  if(!oppPoses.length)return;
+  for(const o of oppPoses){
+    const dx=Math.cos(o.angle+Math.PI/2),dy=Math.sin(o.angle+Math.PI/2);
+    const fx=Math.cos(o.angle)*CAR_FRONT_AXLE,fy=Math.sin(o.angle)*CAR_FRONT_AXLE;
+    const rx=Math.cos(o.angle)*(-CAR_REAR_AXLE),ry=Math.sin(o.angle)*(-CAR_REAR_AXLE);
+    ctx.save();
+    ctx.globalAlpha=o.done?0.5:0.9;
+    const wh=[
+      {x:o.x+fx+dx*CAR_FRONT_TRACK/2,y:o.y+fy+dy*CAR_FRONT_TRACK/2},
+      {x:o.x+fx-dx*CAR_FRONT_TRACK/2,y:o.y+fy-dy*CAR_FRONT_TRACK/2},
+      {x:o.x+rx+dx*CAR_REAR_TRACK/2,y:o.y+ry+dy*CAR_REAR_TRACK/2},
+      {x:o.x+rx-dx*CAR_REAR_TRACK/2,y:o.y+ry-dy*CAR_REAR_TRACK/2}
+    ];
+    for(const w of wh){
+      ctx.save();ctx.translate(w.x,w.y);ctx.rotate(o.angle+Math.PI/2);
+      ctx.fillStyle='#181818';
+      ctx.beginPath();ctx.roundRect(-5,-8,10,17,2);ctx.fill();ctx.restore();
+    }
+    ctx.save();
+    ctx.translate(o.x,o.y);ctx.rotate(o.angle+Math.PI/2);
+    drawCarBody(true,o.body,o.accent);
+    ctx.restore();
+    // Star tag, counter-rotated so it stays upright as the camera turns
+    ctx.save();
+    ctx.translate(o.x,o.y);
+    ctx.rotate(cam.angle+Math.PI/2);
+    ctx.font='bold 30px "Share Tech Mono", monospace';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.lineWidth=5;ctx.strokeStyle='rgba(0,0,0,0.8)';
+    ctx.strokeText(o.label,0,-CAR_L*0.95);
+    ctx.fillStyle=o.body;
+    ctx.fillText(o.label,0,-CAR_L*0.95);
+    ctx.restore();
+    ctx.restore();
+  }
+}
+
 function drawCar(){
   const wRot=car.angle+car.steerVisual;
   const dx=Math.cos(car.angle+Math.PI/2),dy=Math.sin(car.angle+Math.PI/2);
@@ -1223,6 +1338,7 @@ function drawScene(){
   if(!car.falling)drawSkidMarks();
   drawParticles();
   drawGhost();
+  drawOpponents();
   drawCar();
   ctx.restore();
   // Speed vignette: darken/tint the screen edges as you approach top speed.
