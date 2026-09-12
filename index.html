@@ -131,8 +131,11 @@ const CAR_REAR_AXLE   = CAR_L * 0.32;
 const MAX_ROAD = 900;
 const MAX_HEX  = 280;
 const ACCEL    = 820;
-const BRAKE    = 1500;
-const BRAKE_ATTACK = 0.30;  // seconds for braking to reach full force (soft onset)
+const BRAKE    = 2500;
+// Short attack only. A release is both the brake AND how you flip steering
+// direction, so this keeps a quick flip from bleeding speed while letting a
+// deliberate brake reach full force almost immediately.
+const BRAKE_ATTACK = 0.12;
 const COAST    = 140;
 const SPEED_DRAG = 110;   // cubic aero-style drag: negligible at low speed, bites hard near the top
 const STEER    = 1.1;
