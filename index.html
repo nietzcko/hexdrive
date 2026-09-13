@@ -106,7 +106,7 @@ const ROAD_W  = 420;
 // Calibrated against the current handling: each 3-star target is ~15% off the
 // best achievable clean run on that track. Margins are proportional rather than
 // fixed seconds, so the gap between stars stays meaningful on the long tracks.
-const STAR3_TIMES = [10500, 20000, 26000, 24500, 26500, 28000, 31500, 33000, 55500, 87500];
+const STAR3_TIMES = [10500, 20000, 26000, 24500, 26500, 28000, 31500, 33000, 55500, 91000];
 const getStarTimes = (idx) => {
   const t3 = STAR3_TIMES[idx] || 20000;
   return [Math.round(t3*1.20), Math.round(t3*1.08), t3];
@@ -121,10 +121,14 @@ const calcStars = (idx, time) => {
   return 0;
 };
 
-const CAR_L  = 60;
-const CAR_W  = 12;
-const CAR_FRONT_TRACK = 46;
-const CAR_REAR_TRACK  = 46;
+// Car size. Everything below derives from CAR_SCALE, so this one number is the
+// only thing to touch. The road is 420 wide, so even at 1.6 the wheels sit well
+// inside it and the handling is unchanged — this is a visual knob.
+const CAR_SCALE = 1.4;
+const CAR_L  = 60 * CAR_SCALE;
+const CAR_W  = 12 * CAR_SCALE;
+const CAR_FRONT_TRACK = 46 * CAR_SCALE;
+const CAR_REAR_TRACK  = 46 * CAR_SCALE;
 const CAR_FRONT_AXLE  = CAR_L * 0.68;
 const CAR_REAR_AXLE   = CAR_L * 0.32;
 
@@ -152,8 +156,12 @@ const CAM_POS_LERP   = 0.05;
 const CAM_ANGLE_LERP = 0.04;
 const CAM_ZOOM_LERP  = 0.025;
 const CAM_AHEAD      = 0.35;
-const ZOOM_BASE      = 0.48;
-const ZOOM_RANGE     = 0.18;
+// Camera pulled back far enough that the hex tiles read as hexagons. A hex is
+// ~2040 units across (34 car lengths), so there's a real tradeoff here: at 0.30
+// you see roughly 1.6 hex-heights ahead/behind with the car still legible.
+// Lower this to see more; raise it to make the car bigger.
+const ZOOM_BASE      = 0.30;
+const ZOOM_RANGE     = 0.08;   // how much further it pulls back at top speed
 
 const cv  = document.getElementById('c');
 const ctx = cv.getContext('2d');
@@ -214,7 +222,7 @@ function initMenu(){
   const tlvl=LEVEL_DATA[0];
   SEQ=tlvl.map(t=>({entry:t[0],exit:t[1],isStart:t[2]==='S',isFinish:t[2]==='F',isNarrow:t[2]==='N',isCross:t[2]==='X',entry2:t[3]??-1,exit2:t[4]??-1}));
   tCache.forEach(oc => { oc.width = 0; oc.height = 0; }); tCache.clear();buildTrack();warmCache();
-  cam={x:trackTiles[0].cx,y:trackTiles[0].cy,angle:0,zoom:0.6};
+  cam={x:trackTiles[0].cx,y:trackTiles[0].cy,angle:0,zoom:0.22};
   car=null;
   state='menu';
   document.getElementById('finishMenu').style.display='none';
@@ -1070,7 +1078,7 @@ function drawBackground(){
 
 function drawSkidMarks(){
   if(car.skidMarks.length<2)return;
-  ctx.lineWidth=10;ctx.lineCap='round';ctx.lineJoin='round';
+  ctx.lineWidth=10*CAR_SCALE;ctx.lineCap='round';ctx.lineJoin='round';
   for(const side of['l','r']){
     ctx.beginPath();ctx.strokeStyle='rgba(0,0,0,0.7)';
     let last=null;
@@ -1206,7 +1214,11 @@ function drawCarBody(isGhost, bodyCol, accentCol){
 
 function drawLayer(){
   const half=TSIZE/2;
-  const cullR=(Math.max(cv.width,cv.height)/cam.zoom)*1.8;
+  // Cull radius: half the viewport diagonal in world units, plus one hex radius
+  // so a tile whose centre is off-screen but whose body overlaps still draws.
+  // (The old loose 1.8x factor drew ~2x more tiles than needed, which matters
+  // more now the camera sits further back.)
+  const cullR=Math.hypot(cv.width,cv.height)/2/cam.zoom + R*1.15;
   for(const t of allTiles){
     if(Math.hypot(t.cx-cam.x,t.cy-cam.y)>cullR)continue;
     const _rt=renderTile(t);if(!_rt)continue;ctx.save();ctx.translate(t.cx,t.cy);ctx.drawImage(_rt,-half,-half);
@@ -1245,7 +1257,7 @@ function drawGhost(){
   for(const w of wh){
     ctx.save();ctx.translate(w.x,w.y);ctx.rotate(ga+Math.PI/2);
     ctx.fillStyle='#0a2a33';
-    ctx.beginPath();ctx.roundRect(-5,-8,10,17,2);ctx.fill();ctx.restore();
+    ctx.beginPath();ctx.roundRect(-5*CAR_SCALE,-8*CAR_SCALE,10*CAR_SCALE,17*CAR_SCALE,2);ctx.fill();ctx.restore();
   }
   ctx.translate(gx,gy);ctx.rotate(ga+Math.PI/2);
   drawCarBody(true);
@@ -1271,7 +1283,7 @@ function drawOpponents(){
     for(const w of wh){
       ctx.save();ctx.translate(w.x,w.y);ctx.rotate(o.angle+Math.PI/2);
       ctx.fillStyle='#181818';
-      ctx.beginPath();ctx.roundRect(-5,-8,10,17,2);ctx.fill();ctx.restore();
+      ctx.beginPath();ctx.roundRect(-5*CAR_SCALE,-8*CAR_SCALE,10*CAR_SCALE,17*CAR_SCALE,2);ctx.fill();ctx.restore();
     }
     ctx.save();
     ctx.translate(o.x,o.y);ctx.rotate(o.angle+Math.PI/2);
@@ -1281,12 +1293,12 @@ function drawOpponents(){
     ctx.save();
     ctx.translate(o.x,o.y);
     ctx.rotate(cam.angle+Math.PI/2);
-    ctx.font='bold 30px "Share Tech Mono", monospace';
+    ctx.font='bold 84px "Share Tech Mono", monospace';
     ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.lineWidth=5;ctx.strokeStyle='rgba(0,0,0,0.8)';
-    ctx.strokeText(o.label,0,-CAR_L*0.95);
+    ctx.lineWidth=12;ctx.strokeStyle='rgba(0,0,0,0.8)';
+    ctx.strokeText(o.label,0,-CAR_L*1.15);
     ctx.fillStyle=o.body;
-    ctx.fillText(o.label,0,-CAR_L*0.95);
+    ctx.fillText(o.label,0,-CAR_L*1.15);
     ctx.restore();
     ctx.restore();
   }
@@ -1305,7 +1317,7 @@ function drawCar(){
   ];
   for(const w of wh){
     ctx.save();ctx.translate(w.x,w.y);ctx.rotate(w.rot+Math.PI/2);
-    const wl=w.isF?16:18,ww=w.isF?9:11;
+    const wl=(w.isF?16:18)*CAR_SCALE,ww=(w.isF?9:11)*CAR_SCALE;
     ctx.fillStyle=(car.onRoad&&!car.falling)?'#181818':'#222';
     ctx.beginPath();ctx.roundRect(-ww/2,-wl/2,ww,wl,2);ctx.fill();ctx.restore();
   }
