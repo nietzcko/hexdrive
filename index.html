@@ -53,6 +53,25 @@ body { background:#04060a; overflow:hidden; width:100vw; height:100vh; font-fami
 <div id="fl"></div>
 
 <div id="btnRetry" class="icon-btn" onclick="resetGame();state='racing';" style="position:fixed;top:14px;left:16px;z-index:20;display:none;pointer-events:auto;">&#10227;</div><div id="btnMenu" class="icon-btn" onclick="initMenu()" style="position:fixed;top:14px;right:16px;z-index:20;display:none;pointer-events:auto;">&#9776;</div>
+<div id="btnTune" class="icon-btn" onclick="openTune()" style="position:fixed;top:14px;right:74px;z-index:20;display:none;pointer-events:auto;font-size:22px;">&#9881;</div>
+<div id="tuneBadge" style="position:fixed;top:70px;right:16px;z-index:20;display:none;background:rgba(200,120,0,0.85);color:#fff;font-size:11px;font-weight:bold;letter-spacing:1px;padding:4px 10px;border-radius:12px;pointer-events:none;">TUNED &middot; NO RECORDS</div>
+<div id="tunePanel" style="position:fixed;inset:0;background:rgba(4,6,20,0.93);z-index:300;display:none;flex-direction:column;padding:14px 16px 20px;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+    <div style="font-size:20px;font-weight:bold;letter-spacing:2px;color:#fff;">TUNING</div>
+    <button class="ob" style="padding:8px 18px;" onclick="closeTune()">DONE</button>
+  </div>
+  <div id="tuneCurve" style="font-size:11px;color:#8fd6ff;line-height:1.7;background:rgba(0,40,60,0.5);border:1px solid rgba(0,180,255,0.25);border-radius:6px;padding:8px 10px;margin-bottom:10px;font-variant-numeric:tabular-nums;"></div>
+  <div id="tuneList"></div>
+  <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;">
+    <button class="ob" style="background:rgba(120,0,0,0.7);" onclick="resetTune()">RESET TO DEFAULTS</button>
+    <button class="ob" onclick="copyTune()">COPY VALUES</button>
+  </div>
+  <div style="font-size:11px;color:#888;margin-top:12px;line-height:1.6;">
+    Changes apply immediately &mdash; close the panel and drive. While any value differs
+    from the default, records and ghosts are not saved, so experiments can't overwrite
+    your real times. Star targets were calibrated for the default physics.
+  </div>
+</div>
 <div id="ctrl">
   <div class="cb" id="bL" style="left:0;display:none;"><span style="color:rgba(255,255,255,0.2);font-size:32px;">&#9664;</span></div>
   <div class="cb" id="bR" style="right:0;display:none;"><span style="color:rgba(255,255,255,0.2);font-size:32px;">&#9654;</span></div>
@@ -136,25 +155,35 @@ const CAR_REAR_TRACK  = 46 * CAR_SCALE;
 const CAR_FRONT_AXLE  = CAR_L * 0.68;
 const CAR_REAR_AXLE   = CAR_L * 0.32;
 
-const MAX_ROAD = 900;
-const MAX_HEX  = 280;
-const ACCEL    = 820;
-const BRAKE    = 2500;
-// Short attack only. A release is both the brake AND how you flip steering
-// direction, so this keeps a quick flip from bleeding speed while letting a
-// deliberate brake reach full force almost immediately.
-const BRAKE_ATTACK = 0.12;
-const COAST    = 140;
-const SPEED_DRAG = 110;   // cubic aero-style drag: negligible at low speed, bites hard near the top
-const STEER    = 1.1;
-// Handling: the faster you go, the wider the car turns, so you release and slow
-// down to tighten your line into a corner. Arcs are deliberately lazy — roughly
-// 240 units at 60km/h widening to ~1100 at full pace.
-const STEER_BASE = 0.6;  // rate multiplier still available at top speed
-const STEER_SLOW = 0.6;  // extra rate gained as speed drops
+// ── TUNABLE PHYSICS ───────────────────────────────────
+// These are `let` so the in-game tuning panel can change them live.
+// TUNE_DEFAULTS keeps the shipped values so "Reset" always works.
+let MAX_ROAD = 900;    // top speed (units/s). 900 ~ 200 km/h on the HUD
+let MAX_HEX  = 280;
+let ACCEL    = 820;    // engine force; tapers as you approach top speed
+let BRAKE    = 2500;   // peak braking force
+let BRAKE_ATTACK = 0.12; // seconds for the brake to reach full force
+let COAST    = 140;    // drag when neither accelerating nor braking
+let SPEED_DRAG = 110;  // cubic aero drag: bites near the top only
+let STEER    = 1.1;    // overall steering strength
+let STEER_BASE = 0.6;  // steering rate still available at TOP speed
+let STEER_SLOW = 0.6;  // extra steering rate gained as speed drops
+let STEER_CURVE = 1.0; // shape of the speed->steering falloff (see below)
+let DRIFT_MULT = 0.6;  // how hard releasing swings the nose round
+let STEER_PENALTY = 60;// speed lost when you flip direction
+let GRASS_DRAG = 1.5;  // how fast grass slows you
 
-const STEER_PENALTY = 60;
-const GRASS_DRAG = 1.5;
+// Steering rate as a function of speed:
+//   rate = STEER * ( STEER_BASE + STEER_SLOW * (1 - speedFraction)^STEER_CURVE )
+// CURVE = 1 is linear. Above 1 keeps turning wide until you are quite slow
+// (so you must brake hard for corners). Below 1 gives back grip early.
+function steerRateAt(speed){
+  const sf=Math.max(0,Math.min(1,speed/MAX_ROAD));
+  return STEER*(STEER_BASE+STEER_SLOW*Math.pow(1-sf,STEER_CURVE));
+}
+const TUNE_DEFAULTS={MAX_ROAD:900,ACCEL:820,BRAKE:2500,BRAKE_ATTACK:0.12,COAST:140,
+  SPEED_DRAG:110,STEER:1.1,STEER_BASE:0.6,STEER_SLOW:0.6,STEER_CURVE:1.0,
+  DRIFT_MULT:0.6,STEER_PENALTY:60,GRASS_DRAG:1.5,ZOOM_BASE:0.30};
 
 const CAM_POS_LERP   = 0.05;
 const CAM_ANGLE_LERP = 0.04;
@@ -164,7 +193,7 @@ const CAM_AHEAD      = 0.35;
 // ~2040 units across (34 car lengths), so there's a real tradeoff here: at 0.30
 // you see roughly 1.6 hex-heights ahead/behind with the car still legible.
 // Lower this to see more; raise it to make the car bigger.
-const ZOOM_BASE      = 0.30;
+let ZOOM_BASE        = 0.30;
 const ZOOM_RANGE     = 0.08;   // how much further it pulls back at top speed
 
 const cv  = document.getElementById('c');
@@ -222,6 +251,9 @@ function initMenu(){
   document.getElementById('ctrl').style.display='none';document.getElementById('toggleOverlay').style.display='none';document.getElementById('toggleIndicator').style.display='none';
   document.getElementById('btnRetry').style.display='none';
   document.getElementById('btnMenu').style.display='none';
+  document.getElementById('btnTune').style.display='none';
+  document.getElementById('tuneBadge').style.display='none';
+  document.getElementById('tunePanel').style.display='none';
   currentLevelIdx=0;
   const tlvl=LEVEL_DATA[0];
   SEQ=tlvl.map(t=>({entry:t[0],exit:t[1],isStart:t[2]==='S',isFinish:t[2]==='F',isNarrow:t[2]==='N',isCross:t[2]==='X',entry2:t[3]??-1,exit2:t[4]??-1}));
@@ -263,8 +295,8 @@ function loadLevel(idx){
   document.getElementById('ctrl').style.display='block';document.getElementById('toggleOverlay').style.display='block';document.getElementById('toggleIndicator').style.display='block';_syncToggleUI();
   document.getElementById('btnRetry').style.display='flex';
   document.getElementById('btnMenu').style.display='flex';
-
-  document.getElementById('btnRetry').style.display='flex';
+  document.getElementById('btnTune').style.display='flex';
+  syncTuneBadge();
   document.getElementById('hPR').textContent=`PR: ${savedRecords[idx]?fmt(savedRecords[idx]):'--:--.---'}`;
   {
     const best=savedRecords[idx];
@@ -927,13 +959,13 @@ function update(ts){
   const sf=car.speed/MAX_ROAD;
   // Turn rate falls as speed rises, so the cornering arc widens with pace. You
   // have to release and slow down to tighten your line into a corner.
-  const sr=STEER*(STEER_BASE+STEER_SLOW*(1-sf));
+  const sr=steerRateAt(car.speed);
   const steerIn=goL?-1:goR?1:0;
   if(!finished){
     if (brake && lastSteerDir !== 0 && car.speed > 50) {
       // Releasing does double duty: it slows you (which tightens your arc) and
       // drifts the nose around, which is how corners actually get taken.
-      const driftRate = STEER * sf * 0.6 * brakeCurve;
+      const driftRate = STEER * sf * DRIFT_MULT * brakeCurve;
       car.angle += lastSteerDir * driftRate * dt;
       car.steerVisual = lastSteerDir * 0.5 * Math.max(0.35, brakeCurve);
     } else {
@@ -1043,7 +1075,8 @@ function update(ts){
     const onLast=Math.hypot(car.x-lastT.cx,car.y-lastT.cy)<APOTHEM;
     if(onLast&&trackTiles.every(t=>t.visited)){
       finished=true;
-      if(!savedRecords[currentLevelIdx]||raceTime<savedRecords[currentLevelIdx]){
+      // Tuned physics means the time isn't comparable, so it never becomes a record.
+      if(!isTuned() && (!savedRecords[currentLevelIdx]||raceTime<savedRecords[currentLevelIdx])){
         savedRecords[currentLevelIdx]=raceTime;saveRecords();isNewRecord=true;
         // A record run becomes the new ghost for this track.
         ghostRecord(); // capture the final moment
@@ -1463,6 +1496,10 @@ function loop(ts){
   if(state==='racing' || state==='finish'){
     update(ts);
     drawScene();
+  } else if(state==='tuning'){
+    // Physics frozen while the panel is open; keep drawing so changes to the
+    // camera distance are visible straight away behind it.
+    drawScene();
   } else if(state==='menu'){
     if(trackTiles&&trackTiles.length>0 && cam){
       cam.x+=0.5; cam.y-=0.3;
@@ -1481,6 +1518,141 @@ function loop(ts){
 }
 
 initMenu();requestAnimationFrame(loop);
+
+
+// ── TUNING PANEL ──────────────────────────────────────
+// Live physics tweaking. Each entry names a global that the panel writes to.
+const TUNE_SPEC=[
+  {g:'MAX_ROAD',   label:'Top speed',            min:400, max:1400, step:10,   fmt:v=>Math.round(v*(200/900))+' km/h'},
+  {g:'ACCEL',      label:'Acceleration',         min:200, max:1800, step:10},
+  {g:'BRAKE',      label:'Brake force',          min:300, max:4500, step:50},
+  {g:'BRAKE_ATTACK',label:'Brake ramp-in',       min:0,   max:0.6,  step:0.01, fmt:v=>v.toFixed(2)+' s'},
+  {g:'COAST',      label:'Coast drag',           min:0,   max:600,  step:10},
+  {g:'SPEED_DRAG', label:'Aero drag (top end)',  min:0,   max:500,  step:10},
+  {sep:'STEERING'},
+  {g:'STEER',      label:'Steering strength',    min:0.3, max:3.0,  step:0.05, fmt:v=>v.toFixed(2)},
+  {g:'STEER_BASE', label:'Steering at top speed',min:0.05,max:1.6,  step:0.05, fmt:v=>v.toFixed(2)},
+  {g:'STEER_SLOW', label:'Extra steering when slow',min:0,max:2.0,  step:0.05, fmt:v=>v.toFixed(2)},
+  {g:'STEER_CURVE',label:'Curve shape (1=linear)',min:0.3,max:3.0,  step:0.05, fmt:v=>v.toFixed(2)},
+  {g:'DRIFT_MULT', label:'Drift on release',     min:0,   max:1.6,  step:0.05, fmt:v=>v.toFixed(2)},
+  {g:'STEER_PENALTY',label:'Direction-flip penalty',min:0,max:250,  step:5},
+  {sep:'OTHER'},
+  {g:'GRASS_DRAG', label:'Grass slowdown',       min:0,   max:4,    step:0.1,  fmt:v=>v.toFixed(1)},
+  {g:'ZOOM_BASE',  label:'Camera distance',      min:0.14,max:0.60, step:0.01, fmt:v=>v.toFixed(2)+(v<0.26?'  (far)':v>0.42?'  (close)':'')}
+];
+function tuneGet(g){ return eval(g); }
+function tuneSet(g,v){
+  switch(g){
+    case 'MAX_ROAD': MAX_ROAD=v; break;
+    case 'ACCEL': ACCEL=v; break;
+    case 'BRAKE': BRAKE=v; break;
+    case 'BRAKE_ATTACK': BRAKE_ATTACK=v; break;
+    case 'COAST': COAST=v; break;
+    case 'SPEED_DRAG': SPEED_DRAG=v; break;
+    case 'STEER': STEER=v; break;
+    case 'STEER_BASE': STEER_BASE=v; break;
+    case 'STEER_SLOW': STEER_SLOW=v; break;
+    case 'STEER_CURVE': STEER_CURVE=v; break;
+    case 'DRIFT_MULT': DRIFT_MULT=v; break;
+    case 'STEER_PENALTY': STEER_PENALTY=v; break;
+    case 'GRASS_DRAG': GRASS_DRAG=v; break;
+    case 'ZOOM_BASE': ZOOM_BASE=v; break;
+  }
+}
+// Has anything been changed from the shipped values?
+function isTuned(){
+  for(const k in TUNE_DEFAULTS) if(Math.abs(tuneGet(k)-TUNE_DEFAULTS[k])>1e-9) return true;
+  return false;
+}
+function saveTune(){
+  const o={}; for(const k in TUNE_DEFAULTS) o[k]=tuneGet(k);
+  try{ localStorage.setItem('hexRacerTune_v1',JSON.stringify(o)); }catch(e){}
+}
+function loadTune(){
+  try{
+    const raw=localStorage.getItem('hexRacerTune_v1'); if(!raw)return;
+    const o=JSON.parse(raw);
+    for(const k in TUNE_DEFAULTS) if(typeof o[k]==='number') tuneSet(k,o[k]);
+  }catch(e){}
+}
+function syncTuneBadge(){
+  const b=document.getElementById('tuneBadge');
+  if(b) b.style.display=(isTuned() && (state==='racing'||state==='finish'))?'block':'none';
+}
+// Live readout: what the current numbers actually produce.
+function tuneCurveText(){
+  const rows=[60,100,140,180].map(k=>{
+    const speed=Math.min(MAX_ROAD, k/(200/900));
+    const rate=steerRateAt(speed);
+    const rad=rate>0?Math.round(speed/rate):9999;
+    return {k,rad};
+  });
+  const topKmh=Math.round(MAX_ROAD*(200/900));
+  return 'Turn radius by speed (road is 420 wide; sharp corners need ~430):<br>'
+    + rows.filter(r=>r.k<=topKmh).map(r=>'&nbsp;&nbsp;'+String(r.k).padStart(3)+' km/h &rarr; <b>'+r.rad+'</b>'+(r.rad<=430?' &#10003;':'')).join('<br>')
+    + '<br>Top speed ' + topKmh + ' km/h';
+}
+function buildTuneList(){
+  const box=document.getElementById('tuneList'); if(!box)return;
+  box.innerHTML='';
+  for(const sp of TUNE_SPEC){
+    if(sp.sep){
+      const h=document.createElement('div');
+      h.style.cssText='font-size:12px;letter-spacing:2px;color:#ffcc00;margin:14px 0 6px;font-weight:bold;';
+      h.textContent=sp.sep; box.appendChild(h); continue;
+    }
+    const row=document.createElement('div');
+    row.style.cssText='margin-bottom:12px;';
+    const val=tuneGet(sp.g);
+    const shown=sp.fmt?sp.fmt(val):String(Math.round(val));
+    row.innerHTML='<div style="display:flex;justify-content:space-between;font-size:13px;color:#e0f4ff;margin-bottom:3px;">'
+      +'<span>'+sp.label+'</span><span id="tv_'+sp.g+'" style="color:#00cfff;font-weight:bold;">'+shown+'</span></div>';
+    const inp=document.createElement('input');
+    inp.type='range'; inp.min=sp.min; inp.max=sp.max; inp.step=sp.step; inp.value=val;
+    inp.style.cssText='width:100%;accent-color:#00cfff;height:26px;';
+    inp.oninput=()=>{
+      const v=parseFloat(inp.value);
+      tuneSet(sp.g,v);
+      document.getElementById('tv_'+sp.g).textContent=sp.fmt?sp.fmt(v):String(Math.round(v));
+      document.getElementById('tuneCurve').innerHTML=tuneCurveText();
+      saveTune(); syncTuneBadge();
+    };
+    row.appendChild(inp);
+    box.appendChild(row);
+  }
+  document.getElementById('tuneCurve').innerHTML=tuneCurveText();
+}
+let _tunePrevState=null;
+function openTune(){
+  _tunePrevState=state;
+  state='tuning';                 // freezes the physics while you adjust
+  document.getElementById('tunePanel').style.display='flex';
+  document.getElementById('toggleOverlay').style.display='none';
+  document.getElementById('ctrl').style.display='none';
+  buildTuneList();
+}
+function closeTune(){
+  document.getElementById('tunePanel').style.display='none';
+  if(_tunePrevState==='racing'||_tunePrevState==='finish'){
+    document.getElementById('toggleOverlay').style.display='block';
+    document.getElementById('ctrl').style.display='block';
+  }
+  state=_tunePrevState||'racing';
+  lastTs=performance.now();       // don't let the paused time become one huge dt
+  syncTuneBadge();
+}
+function resetTune(){
+  for(const k in TUNE_DEFAULTS) tuneSet(k,TUNE_DEFAULTS[k]);
+  try{ localStorage.removeItem('hexRacerTune_v1'); }catch(e){}
+  buildTuneList(); syncTuneBadge();
+}
+function copyTune(){
+  const lines=[]; for(const k in TUNE_DEFAULTS) lines.push('let '+k+' = '+tuneGet(k)+';');
+  const txt=lines.join('\n');
+  try{ navigator.clipboard.writeText(txt); doFlash('VALUES COPIED','#00ffcc'); }
+  catch(e){ console.log(txt); doFlash('SEE CONSOLE','#ffcc00'); }
+}
+loadTune();
 
 function clearPRs(){
   if(confirm('Are you sure you want to clear all records?')){
