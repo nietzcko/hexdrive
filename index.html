@@ -106,10 +106,14 @@ const ROAD_W  = 420;
 // Calibrated against the current handling: each 3-star target is ~15% off the
 // best achievable clean run on that track. Margins are proportional rather than
 // fixed seconds, so the gap between stars stays meaningful on the long tracks.
-const STAR3_TIMES = [10500, 20000, 26000, 24500, 26500, 28000, 31500, 33000, 55500, 91000];
+// Tightened: 3-star now sits only ~5% off the fastest clean run a strong driver
+// manages, so it demands a near-perfect lap rather than just a tidy one.
+const STAR3_TIMES = [9500, 18000, 23000, 21500, 23500, 25500, 28000, 29500, 50500, 82500];
 const getStarTimes = (idx) => {
   const t3 = STAR3_TIMES[idx] || 20000;
-  return [Math.round(t3*1.20), Math.round(t3*1.08), t3];
+  // Wider spread between tiers than before: 1 star stays accessible for
+  // unlocking the next track, 3 stars is the real challenge.
+  return [Math.round(t3*1.24), Math.round(t3*1.10), t3];
 };
 
 const calcStars = (idx, time) => {
@@ -849,6 +853,9 @@ function resetGame(){
   // Ghost: clear this attempt's recording and arm the saved best for replay.
   ghostRec=[];
   oppPoses=[];
+  // Locked in at the start of the run, so beating your record can't swap the
+  // rival out from under you mid-race.
+  pickOpponent();
   ghostPlay=savedGhosts[currentLevelIdx]||null;
   ghostPose=ghostPlay&&ghostPlay.length>=3
     ? {x:ghostPlay[0],y:ghostPlay[1],angle:ghostPlay[2],done:false}
@@ -1147,15 +1154,29 @@ function oppDistance(tSec, target, total){
   return vmax*Ta/2 + vmax*(tSec-Ta);
 }
 
+// Which rival is on track this run: the next tier you haven't earned yet.
+// 0 stars -> race the 1-star car, 1 star -> the 2-star car, 2 stars -> the
+// 3-star car, and once you hold all three there's no rival left, just your ghost.
+let oppActive=null;
+function pickOpponent(){
+  const stars=calcStars(currentLevelIdx, savedRecords[currentLevelIdx]);
+  if(stars>=3){ oppActive=null; return; }
+  const wantTier=stars+1;  // 1, 2 or 3
+  const o=OPPONENTS.find(x=>x.tier===wantTier)||null;
+  if(!o){ oppActive=null; return; }
+  const times=getStarTimes(currentLevelIdx); // [t1, t2, t3]
+  const target=wantTier===3?times[2]:wantTier===2?times[1]:times[0];
+  oppActive={...o, target};
+}
+
 function oppUpdate(){
   oppPoses=[];
-  if(!oppLine||state!=='racing'&&state!=='finish')return;
-  const times=getStarTimes(currentLevelIdx); // [t1, t2, t3]
+  if(!oppLine||!oppActive||state!=='racing'&&state!=='finish')return;
   const {xs,ys,cum,total}=oppLine;
   const n=xs.length;
-  for(const o of OPPONENTS){
-    const target=o.tier===3?times[2]:o.tier===2?times[1]:times[0];
-    const d=oppDistance(raceTime/1000, target, total);
+  const o=oppActive;
+  {
+    const d=oppDistance(raceTime/1000, o.target, total);
     const done=d>=total;
     const dd=Math.min(d,total);
     // binary search the cumulative table for this distance
