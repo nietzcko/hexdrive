@@ -127,7 +127,12 @@ const ROAD_W  = 420;
 // fixed seconds, so the gap between stars stays meaningful on the long tracks.
 // Tightened: 3-star now sits only ~5% off the fastest clean run a strong driver
 // manages, so it demands a near-perfect lap rather than just a tidy one.
-const STAR3_TIMES = [9000, 16500, 21000, 17500, 21500, 23000, 26000, 26500, 43000, 73000];
+// Calibrated against REAL human times, not the reference driver. The robot wins
+// by flipping direction ~20x/second to travel near-straight, which a person
+// can't reproduce — it runs about 10% faster than a skilled human as a result.
+// Levels 1-5 are set just above measured personal bests; 7 and 8 are known
+// beatable; 6, 9 and 10 apply the measured +10% human factor to the robot time.
+const STAR3_TIMES = [9150, 17300, 22000, 19350, 23150, 24300, 26000, 26500, 45400, 77000];
 const getStarTimes = (idx) => {
   const t3 = STAR3_TIMES[idx] || 20000;
   // Wider spread between tiers than before: 1 star stays accessible for
@@ -288,6 +293,13 @@ function initMenu(){
 }
 
 function loadLevel(idx){
+  // Changing level makes the previous level's tile canvases dead weight. Freeing
+  // them here is what stops memory growing every time you advance a level
+  // (which on iOS showed up as the page reloading itself).
+  if(idx!==currentLevelIdx){
+    tCache.forEach(oc=>{ oc.width=0; oc.height=0; });
+    tCache.clear();
+  }
   currentLevelIdx=idx;
   SEQ=LEVEL_DATA[idx].map(t=>({entry:t[0],exit:t[1],isStart:t[2]==='S',isFinish:t[2]==='F',isNarrow:t[2]==='N',isCross:t[2]==='X',entry2:t[3]??-1,exit2:t[4]??-1}));
   document.getElementById('lvlSel').style.display='none';
@@ -495,15 +507,28 @@ function getPhysicsWheels(cx,cy,angle){
 
 // RENDER CACHE
 const TSIZE=Math.ceil(R*2+10);
+// Tile canvases are rendered at a fraction of their world size and drawn scaled.
+// 0.75 matches the closest pinch zoom (0.75), so a tile is never upscaled on
+// screen, while cutting each canvas from ~16MB to ~9MB.
+const TILE_RES=0.75;
+const TPIX=Math.ceil(TSIZE*TILE_RES);
 const tCache=new Map();
 
 function renderTile(tile){
   if(tile.skipRender) { if(tCache.has("skip")) return tCache.get("skip"); const oc=document.createElement("canvas"); oc.width=oc.height=1; tCache.set("skip", oc); return oc; }
   try{
-  const ck=`${tile.key}_${tile.entry}_${tile.exit}_${tile.isNarrow?'N':'W'}${tile.isCross?'C'+tile.entry2+tile.exit2:''}_${tile.biome}_${tile.theme||'grass'}`;
+  // Cache key describes the tile's APPEARANCE only — deliberately not tile.key —
+  // so every tile that looks the same shares one canvas. Each canvas is ~16MB,
+  // so keying per-tile used over a gigabyte on the bigger levels.
+  // isStart/isFinish/isDeco must be included: they change what gets drawn.
+  const ck=`${tile.entry}_${tile.exit}_${tile.isNarrow?'N':'W'}`
+    +`${tile.isCross?'C'+tile.entry2+tile.exit2:''}`
+    +`_${tile.isStart?'S':''}${tile.isFinish?'F':''}${tile.isDeco?'D':'T'}`
+    +`_${tile.biome}_${tile.theme||'grass'}`;
   if(tCache.has(ck))return tCache.get(ck);
-  const oc=document.createElement('canvas');oc.width=oc.height=TSIZE;
+  const oc=document.createElement('canvas');oc.width=oc.height=TPIX;
   const c=oc.getContext('2d');const lc=TSIZE/2;
+  c.scale(TILE_RES,TILE_RES);   // keep drawing in world units
   function hexPath(pad){
     pad=pad||0;c.beginPath();
     for(let i=0;i<6;i++){const a=Math.PI/3*i,r2=R+pad;i===0?c.moveTo(lc+r2*Math.cos(a),lc+r2*Math.sin(a)):c.lineTo(lc+r2*Math.cos(a),lc+r2*Math.sin(a));}
@@ -534,7 +559,9 @@ function renderTile(tile){
         for(let i=0;i<6;i++){const a=Math.PI/3*i;i===0?c.moveTo(lc+R*Math.cos(a),lc+R*Math.sin(a)):c.lineTo(lc+R*Math.cos(a),lc+R*Math.sin(a));}
         c.closePath(); c.fill();
         if (tile.biome === 'water') {
-          let seed = tile.cx*13.37 + tile.cy*42.0;
+          // Fixed seed: water tiles share one cached canvas now, so the pattern
+          // must not depend on position.
+          let seed = 12345;
           const rnd = ()=>{seed=(seed*9301+49297)%233280;return seed/233280;};
           c.strokeStyle='rgba(255,255,255,0.06)';
           c.lineWidth=5; c.lineCap='round';
@@ -1324,7 +1351,7 @@ function drawLayer(){
   const cullR=Math.hypot(cv.width,cv.height)/2/cam.zoom + R*1.15;
   for(const t of allTiles){
     if(Math.hypot(t.cx-cam.x,t.cy-cam.y)>cullR)continue;
-    const _rt=renderTile(t);if(!_rt)continue;ctx.save();ctx.translate(t.cx,t.cy);ctx.drawImage(_rt,-half,-half);
+    const _rt=renderTile(t);if(!_rt)continue;ctx.save();ctx.translate(t.cx,t.cy);ctx.drawImage(_rt,-half,-half,TSIZE,TSIZE);
     if(t.visited&&!t.isDeco){
       const rVis = R - 10;
       ctx.beginPath();for(let i=0;i<6;i++)i===0?ctx.moveTo(rVis*Math.cos(Math.PI/3*i),rVis*Math.sin(Math.PI/3*i)):ctx.lineTo(rVis*Math.cos(Math.PI/3*i),rVis*Math.sin(Math.PI/3*i));
