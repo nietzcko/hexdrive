@@ -131,7 +131,7 @@ const CAR_REAR_AXLE   = CAR_L*0.32;
 // ── STAR TIMES ───────────────────────────────────────
 // Calibrated against real human times on the default physics: three stars is a
 // near-perfect lap, one star opens the next circuit.
-const STAR3_TIMES=[9150,17300,22000,19350,23150,24300,26000,26500,45400,77000,26400];
+const STAR3_TIMES=[25500,9150,17300,22550,19350,23150,26300,26000,26500,46900,83650,28000];
 const getStarTimes=idx=>{
   const t3=STAR3_TIMES[idx]||20000;
   return [Math.round(t3*1.24),Math.round(t3*1.10),t3];
@@ -220,30 +220,36 @@ function lcg(seed){ let s=(seed>>>0)||1; return ()=>{ s=(s*1664525+1013904223)>>
 // [entryEdge, exitEdge, flags, crossEntry, crossExit]
 //   S start · F finish · N narrow lane · X crossroads
 const LEVEL_DATA=[
-  [[3,0,"S"],[3,0],[3,0],[3,0],[3,0,"F"]],
-  [[3,0,"S"],[3,0],[3,1],[4,2],[5,2],[5,3],[0,4],[1,4],[1,5,"F"]],
-  [[3,0,"S"],[3,0],[3,0],[3,1],[4,1],[4,2],[5,2],[5,3],[0,4],[1,4],[1,5,"F"]],
-  [[3,0,"S"],[3,1],[4,5],[2,4],[1,4],[1,5],[2,1],[4,0],[3,5],[2,0,"F"]],
-  [[3,0,"S"],[3,0,"X",4,1],[3,5],[2,4],[1,3],[0,2],[5,1],[4,1,"X",3,0],[4,2],[5,3],[0,4],[1,4,"F"]],
-  [[3,0,"S"],[3,1,"N"],[4,5],[2,4],[1,4],[1,5],[2,1],[4,1],[4,5],[2,4],[1,4,"F"]],
-  [[3,0,"S"],[3,1,"N"],[4,0,"N"],[3,4,"N"],[1,0,"N"],[3,1,"N"],[4,1,"N"],[4,0,"N"],[3,5,"N"],[2,4,"N"],[1,2,"N"],[5,2,"F"]],
-  [[3,0,"S"],[3,0],[3,0],[3,0,"X",4,1],[3,5],[2,4],[1,3],[0,2],[5,1],[4,1,"X",3,0],[4,0],[3,0],[3,5],[2,0,"F"]],
-  [[3,0,"S"],[3,2],[5,3],[0,3],[0,1],[4,0],[3,2],[5,3,"N"],[0,3,"N"],[0,5,"N"],[2,3],[0,2],[5,1],[4,0],[3,0],[3,2],[5,0],[3,5],[2,1],[4,2],[5,3],[0,3,"F"]],
-  [[3,0,"S"],[3,0],[3,4],[1,3],[0,3],[0,2],[5,2],[5,0],[3,0],[3,1],[4,3],[0,3],[0,3],[0,1],[4,0],[3,0],[3,0],[3,2],[5,3],[0,3],[0,3],[0,2,"N"],[5,0,"N"],[3,0,"N"],[3,0,"N"],[3,1,"N"],[4,3,"N"],[0,3,"N"],[0,3,"N"],[0,2,"N"],[5,2,"F"]],
-  // SLALOM. Straight tiles carrying blocks: "O",2 splits the road into three
-  // lines, "O",1 into two — and a single block can sit off-centre, which closes
-  // one side entirely. Pick a line early, because the car turns wide at speed.
-  [[3,0,"S"],[3,0],[3,0,"O",2],[3,0],[3,0,"O",1,-1],[3,0],[3,0,"O",2],[3,0],[3,0,"O",1,1],[3,0],[3,0,"O",2],[3,0,"F"]]
+  // 0 — PROVING GROUND. Always open, never gates anything: turns, turbo pads
+  // and every kind of block, so you can feel them before any of it matters.
+  // "TR"/"TL" paint a boost pad down that half of the road; "O",2 is a pair,
+  // "O",1,0 puts one in the middle, "O",1,side shuts that side. A tile can
+  // carry both, e.g. "OTR", and a narrow lane can carry a pad, e.g. "NTL".
+  [[3,0,"S"],[3,0,"TR"],[3,0,"O",2],[3,1],[4,2],[5,2,"TL"],[5,2,"O",1,1],[5,3],[0,3,"O",1,0],[0,3,"OTR",2],[0,4],[1,4],[1,5],[2,5,"F"]],
+  // 1-10 — the circuits. Blocks go on the full-width straights, pads fill in
+  // between, including out of the corners and down the narrow lanes.
+  [[3,0,"S"],[3,0,"TR"],[3,0],[3,0,"TL"],[3,0,"F"]],
+  [[3,0,"S"],[3,0,"O",1,1],[3,1],[4,2],[5,2,"O",2],[5,3],[0,4,"TR"],[1,4],[1,5,"F"]],
+  [[3,0,"S"],[3,0,"O",2],[3,0],[3,1],[4,1,"O",1,-1],[4,2],[5,2,"TL"],[5,3],[0,4],[1,4],[1,5,"F"]],
+  [[3,0,"S"],[3,1],[4,5,"TR"],[2,4],[1,4,"O",1,-1],[1,5],[2,1,"TL"],[4,0],[3,5],[2,0,"F"]],
+  [[3,0,"S"],[3,0,"X",4,1],[3,5,"TL"],[2,4],[1,3],[0,2,"TR"],[5,1],[4,1,"X",3,0],[4,2],[5,3],[0,4],[1,4,"F"]],
+  [[3,0,"S"],[3,1,"N"],[4,5,"TR"],[2,4],[1,4,"O",2],[1,5],[2,1],[4,1,"O",1,0],[4,5],[2,4],[1,4,"F"]],
+  [[3,0,"S"],[3,1,"N"],[4,0,"NTL"],[3,4,"N"],[1,0,"N"],[3,1,"NTR"],[4,1,"N"],[4,0,"N"],[3,5,"N"],[2,4,"N"],[1,2,"N"],[5,2,"F"]],
+  [[3,0,"S"],[3,0,"O",1,1],[3,0],[3,0,"X",4,1],[3,5,"TR"],[2,4],[1,3],[0,2,"TL"],[5,1],[4,1,"X",3,0],[4,0],[3,0,"O",2],[3,5],[2,0,"F"]],
+  [[3,0,"S"],[3,2],[5,3],[0,3,"O",2],[0,1],[4,0,"TL"],[3,2],[5,3,"N"],[0,3,"NTR"],[0,5,"N"],[2,3],[0,2,"TL"],[5,1],[4,0],[3,0,"O",1,-1],[3,2],[5,0,"TR"],[3,5],[2,1],[4,2],[5,3],[0,3,"F"]],
+  [[3,0,"S"],[3,0,"O",1,-1],[3,4],[1,3],[0,3,"O",1,0],[0,2],[5,2,"TR"],[5,0],[3,0,"O",2],[3,1],[4,3],[0,3,"O",1,0],[0,3],[0,1,"TL"],[4,0],[3,0,"O",1,1],[3,0],[3,2,"TR"],[5,3],[0,3,"O",2],[0,3],[0,2,"NTL"],[5,0,"N"],[3,0,"N"],[3,0,"NTR"],[3,1,"N"],[4,3,"N"],[0,3,"NTL"],[0,3,"N"],[0,2,"N"],[5,2,"F"]],
+  // 11 — SLALOM: nothing but blocks and pads, back to back.
+  [[3,0,"S"],[3,0,"TR"],[3,0,"O",2],[3,0,"O",1,0],[3,0,"O",1,-1],[3,0,"TL"],[3,0,"OTL",2],[3,0],[3,0,"O",1,1],[3,0,"TR"],[3,0,"O",2],[3,0,"F"]]
 ];
 
 // ── RECORDS AND GHOSTS ───────────────────────────────
 let savedRecords=Array(LEVEL_DATA.length).fill(null);
-try{ const s=localStorage.getItem('hexDriveRecords_v3'); if(s)savedRecords=JSON.parse(s); }catch(e){}
-function saveRecords(){ try{ localStorage.setItem('hexDriveRecords_v3',JSON.stringify(savedRecords)); }catch(e){} }
+try{ const s=localStorage.getItem('hexDriveRecords_v4'); if(s)savedRecords=JSON.parse(s); }catch(e){}
+function saveRecords(){ try{ localStorage.setItem('hexDriveRecords_v4',JSON.stringify(savedRecords)); }catch(e){} }
 const GHOST_DT=50, GHOST_MAX=6000;
 let savedGhosts=Array(LEVEL_DATA.length).fill(null);
-try{ const g=localStorage.getItem('hexDriveGhosts_v3'); if(g)savedGhosts=JSON.parse(g); }catch(e){}
-function saveGhosts(){ try{ localStorage.setItem('hexDriveGhosts_v3',JSON.stringify(savedGhosts)); }catch(e){} }
+try{ const g=localStorage.getItem('hexDriveGhosts_v4'); if(g)savedGhosts=JSON.parse(g); }catch(e){}
+function saveGhosts(){ try{ localStorage.setItem('hexDriveGhosts_v4',JSON.stringify(savedGhosts)); }catch(e){} }
 let ghostRec=[],ghostPlay=null,ghostPose=null;
 
 let SEQ=[],currentLevelIdx=0,builtLevel=-1;
@@ -287,7 +293,7 @@ const THEMES={
     terr:['stone','paving','dirt','stone','meadow','paving'],water:'water',
     build:2,verge:['lamp','broad','lamp','bush']}
 };
-const LEVEL_THEME=['meadow','pine','town','desert','city','snow','meadow','city','snow','town','desert'];
+const LEVEL_THEME=['meadow','meadow','pine','town','desert','city','snow','meadow','city','snow','town','desert'];
 // ── OBSTACLES ────────────────────────────────────────
 // A straight tile can carry blocks on the racing surface, splitting it into
 // separate lines you have to choose between. Sized against the standard 420
@@ -297,10 +303,41 @@ const LEVEL_THEME=['meadow','pine','town','desert','city','snow','meadow','city'
 //   two blocks -> three lanes, each giving the car about 36 units of latitude
 const OBS_ROAD_MULT=1.0;
 const OBS_R1=80;            // a single centre block
-const OBS_R2=14;            // each of a pair
-const OBS_OFFSET2=84;       // lateral offset of the pair
+const OBS_R2=26;            // each of a pair — chunky enough to read at speed
+const OBS_OFFSET2=98;       // pushed out so the three lanes stay drivable
 const OBS_SIDE_OFFSET=96;   // far enough off-centre to shut that side completely
 const OBS_HIT_SPEED=0.35;   // speed kept when you clip one
+// ── TURBO STRIPS ─────────────────────────────────────
+// A boost pad painted down one half of the road. You only get it if you commit
+// to that side, which is the whole point: the fast line and the safe line are
+// not the same line.
+const TURBO_FORCE=2400;     // extra drive while you are on the pad
+const TURBO_OVER=0.30;      // how far over the normal top speed it can push you
+const TURBO_DECAY=1.5;      // seconds for the overspeed to bleed away
+function boostFor(tile){
+  if(!tile.isBoost)return null;
+  const bz=localBezier(tile.entry,tile.exit);
+  const w=roadWidthOf(tile);
+  const pts=[];
+  for(let i=0;i<=12;i++){
+    const tt=0.36+0.28*(i/12);   // a short burst, not half the tile
+    const a1=bezPt(tt,bz.p0,bz.cp1,bz.cp2,bz.p3);
+    const a2=bezPt(Math.min(1,tt+0.01),bz.p0,bz.cp1,bz.cp2,bz.p3);
+    const na=Math.atan2(a2.y-a1.y,a2.x-a1.x)+Math.PI/2;
+    const off=(tile.boostSide||1)*w*0.25;      // centre of that half
+    pts.push({x:a1.x+Math.cos(na)*off,y:a1.y+Math.sin(na)*off});
+  }
+  return {pts:pts,w:w*0.5};
+}
+// Distance from a point to the pad's centre line, both in tile-local coords.
+function boostDist(bo,lx,ly){
+  let best=Infinity;
+  for(let i=1;i<bo.pts.length;i++){
+    const d=distToSegment(lx,ly,bo.pts[i-1].x,bo.pts[i-1].y,bo.pts[i].x,bo.pts[i].y);
+    if(d<best)best=d;
+  }
+  return best;
+}
 function roadWidthOf(t){
   if(t.isNarrow)return ROAD_W*0.45;
   if(t.isObs)return ROAD_W*OBS_ROAD_MULT;
@@ -310,6 +347,12 @@ function roadWidthOf(t){
 // drawing.
 function obstaclesFor(tile,cx,cy){
   if(!tile.isObs)return [];
+  // A block only belongs where the road can still be driven round it: a narrow
+  // lane or a crossroads would be sealed shut, so those tiles refuse blocks.
+  if(tile.isNarrow||tile.isCross)return [];
+  const halfW=roadWidthOf(tile)/2;
+  const needed=tile.obsN===1?OBS_R1+56:OBS_OFFSET2+OBS_R2+40;
+  if(halfW<needed)return [];
   const p0=edgeMid(cx,cy,tile.entry),p3=edgeMid(cx,cy,tile.exit);
   const bz={p0:p0,cp1:{x:cx*0.5+p0.x*0.5,y:cy*0.5+p0.y*0.5},
                   cp2:{x:cx*0.5+p3.x*0.5,y:cy*0.5+p3.y*0.5},p3:p3};
@@ -328,7 +371,7 @@ function obstaclesFor(tile,cx,cy){
   ];
 }
 
-const CIRCUIT_NAMES=['MEADOW MILE','PINE HOLLOW','OLD TOWN','DUST BOWL','CROSSTOWN',
+const CIRCUIT_NAMES=['PROVING GROUND','MEADOW MILE','PINE HOLLOW','OLD TOWN','DUST BOWL','CROSSTOWN',
   'GLACIER PASS','HEDGE LANES','GRAND CENTRAL','FROZEN HARBOUR','THE LONG TOUR','SLALOM'];
 function theme(){ return THEMES[LEVEL_THEME[currentLevelIdx]||'meadow']; }
 
@@ -423,7 +466,7 @@ function bevel(){
 // the same share one path. No canvases anywhere.
 const roadCache=new Map();
 function roadPaths(tile){
-  const key=tile.entry+'_'+tile.exit+(tile.isNarrow?'N':'')+(tile.isObs?'O':'')+
+  const key=tile.entry+'_'+tile.exit+(tile.isNarrow?'N':'')+(tile.isObs?'O':'')+(tile.isBoost?'T'+tile.boostSide:'')+
     (tile.isCross?'X'+tile.entry2+'_'+tile.exit2:'');
   let m=roadCache.get(key);
   if(m)return m;
@@ -457,6 +500,7 @@ function buildTrack(){
     trackTiles.push({idx:i,cx:cx,cy:cy,entry:s.entry,exit:s.exit,
       isStart:s.isStart,isFinish:s.isFinish,isNarrow:s.isNarrow,isCross:s.isCross,
       isObs:s.isObs,obsN:s.obsN,obsSide:s.obsSide,
+      isBoost:s.isBoost,boostSide:s.boostSide,
       entry2:s.entry2,exit2:s.exit2,kind:TH.track,isDeco:false,
       skipRender:skipRender,visited:false});
     centerMap.add(cKey);
@@ -498,7 +542,7 @@ function buildTrack(){
   }
 
   // world-space obstacle positions, worked out once per build
-  for(const t of trackTiles)t._obs=obstaclesFor(t,t.cx,t.cy);
+  for(const t of trackTiles){t._obs=obstaclesFor(t,t.cx,t.cy);t._boost=boostFor(t);}
   buildSpatialGrid();
   buildSpine();
   buildOpponentLine();
@@ -1064,7 +1108,8 @@ function resetGame(){
   const em=edgeMid(st.cx,st.cy,st.exit),em0=edgeMid(st.cx,st.cy,st.entry);
   car={x:st.cx,y:st.cy,angle:Math.atan2(em.y-em0.y,em.x-em0.x),
     speed:0,skidMarks:[],falling:false,fallAlpha:1,trackIdx:0,onRoad:true,
-    steerVisual:0,brakeRamp:0,stun:0,deathMsg:'OFF TRACK',deathColor:'#ff5577'};
+    steerVisual:0,brakeRamp:0,stun:0,onPad:false,boost:0,
+    deathMsg:'OFF TRACK',deathColor:'#ff5577'};
   cam={x:car.x,y:car.y,angle:car.angle,zoom:ZOOM_BASE};
   particles=[];lastSteerDir=0;steerReverseTimer=0;
   ghostRec=[];
@@ -1124,7 +1169,11 @@ function update(ts){
   }
   car.speed-=SPEED_DRAG*Math.pow(car.speed/MAX_ROAD,3)*dt;
   if(!car.onRoad)car.speed*=(1-KERB_DRAG*dt);
-  car.speed=Math.max(0,Math.min(MAX_ROAD,car.speed));
+  // Turbo: extra drive while you are on the pad, plus a ceiling above the
+  // normal top speed that bleeds back down once you come off it.
+  if(car.onPad&&!finished){ car.speed+=TURBO_FORCE*dt; car.boost=1; }
+  else if(car.boost>0) car.boost=Math.max(0,car.boost-dt/TURBO_DECAY);
+  car.speed=Math.max(0,Math.min(MAX_ROAD*(1+TURBO_OVER*(car.boost||0)),car.speed));
 
   const sf=car.speed/MAX_ROAD,sr=steerRateAt(car.speed);
   const steerIn=goL?-1:goR?1:0;
@@ -1192,6 +1241,16 @@ function update(ts){
     }
     const half=roadWidthOf(cT)/2;
     car.onRoad=maxW<=half+5;
+    // Are we on a turbo pad? It only covers one half of the road.
+    let pad=false;
+    for(const ci of candidates){
+      const ct=allTiles[ci];
+      if(!ct._boost)continue;
+      if(boostDist(ct._boost,car.x-ct.cx,car.y-ct.cy)<=ct._boost.w*0.5){pad=true;break;}
+    }
+    pad=pad&&car.onRoad;
+    if(pad&&!car.onPad)doFlash('TURBO','#59e8ff');
+    car.onPad=pad;
     if(!car.onRoad&&car.speed>80&&Math.random()<0.5){
       const dxp=Math.cos(car.angle+Math.PI/2),dyp=Math.sin(car.angle+Math.PI/2);
       const rxp=Math.cos(car.angle)*-CAR_REAR_AXLE,ryp=Math.sin(car.angle)*-CAR_REAR_AXLE;
@@ -1199,7 +1258,7 @@ function update(ts){
       spawnDust(car.x+rxp-dxp*CAR_REAR_TRACK/2,car.y+ryp-dyp*CAR_REAR_TRACK/2,1,'rgba(164,174,188,0.55)');
     }
   }else{
-    car.onRoad=false;
+    car.onRoad=false;car.onPad=false;
   }
 
   // Clipping a slalom block scrubs your speed and kicks the nose away from it.
@@ -1253,6 +1312,10 @@ function update(ts){
     }
   }
 
+  if(car.boost>0.05&&car.speed>120&&Math.random()<0.85){
+    const bx=car.x-Math.cos(car.angle)*CAR_L*0.6,by=car.y-Math.sin(car.angle)*CAR_L*0.6;
+    spawnDust(bx,by,1,Math.random()<0.5?'rgba(89,232,255,0.95)':'rgba(255,255,255,0.85)');
+  }
   if(car.onRoad&&!finished&&car.isBraking&&car.brakeRamp>0.35&&car.speed>10){
     const dxp=Math.cos(car.angle+Math.PI/2),dyp=Math.sin(car.angle+Math.PI/2);
     const rX=Math.cos(car.angle)*-CAR_REAR_AXLE,rY=Math.sin(car.angle)*-CAR_REAR_AXLE;
@@ -1431,6 +1494,33 @@ function drawLayer(){
     }
     ctx.restore();
   }
+  // 3c turbo pads: half the road, painted so you can see which half
+  for(const t of road){
+    if(!t._boost)continue;
+    const bo=t._boost,p=roadPaths(t);
+    const path=new Path2D();
+    path.moveTo(bo.pts[0].x,bo.pts[0].y);
+    for(let i=1;i<bo.pts.length;i++)path.lineTo(bo.pts[i].x,bo.pts[i].y);
+    ctx.save();ctx.translate(t.cx,t.cy);ctx.clip(HEX_TILE);
+    ctx.lineCap='butt';ctx.lineJoin='round';
+    ctx.lineWidth=bo.w;ctx.strokeStyle='rgba(28,150,190,0.62)';ctx.stroke(path);
+    ctx.lineWidth=bo.w-16;ctx.strokeStyle='rgba(70,214,255,0.34)';ctx.stroke(path);
+    if(detail){
+      // chevrons pointing the way you are meant to be going
+      ctx.strokeStyle='rgba(226,250,255,0.85)';ctx.lineWidth=15;ctx.lineCap='round';
+      for(let i=1;i<bo.pts.length-1;i+=3){
+        const a=bo.pts[i],b=bo.pts[i+1];
+        const ang=Math.atan2(b.y-a.y,b.x-a.x);
+        const s1=bo.w*0.30;
+        ctx.beginPath();
+        ctx.moveTo(a.x-Math.cos(ang+0.7)*s1,a.y-Math.sin(ang+0.7)*s1);
+        ctx.lineTo(a.x+Math.cos(ang)*s1*0.5,a.y+Math.sin(ang)*s1*0.5);
+        ctx.lineTo(a.x-Math.cos(ang-0.7)*s1,a.y-Math.sin(ang-0.7)*s1);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
   // 4 start and finish markings
   for(const t of road){
     if(!t.isStart&&!t.isFinish)continue;
@@ -1468,21 +1558,47 @@ function drawLayer(){
     const mid=bezPt(0.5,bz.p0,bz.cp1,bz.cp2,bz.p3);
     const obs=obstaclesFor(t,0,0);
     if(detail){
-      const side=(t.obsSide||0)*OBS_SIDE_OFFSET;
-      const lanes=t.obsN===1?[side-(OBS_R1+60),side+(OBS_R1+60)]
-                            :[-(OBS_OFFSET2+OBS_R2+38),0,OBS_OFFSET2+OBS_R2+38];
+      // Two kinds of sign, because there are two kinds of problem. When more
+      // than one lane is open, a chevron down each open lane tells you where
+      // they are. When a block shuts one side of the road, that is not a choice
+      // of lane, so a single arrow points across at the only way past.
+      const closedSide = t.obsN===1 && t.obsSide ? t.obsSide : 0;
       ctx.save();ctx.translate(t.cx,t.cy);ctx.clip(HEX_TILE);
-      ctx.strokeStyle='rgba(255,255,255,0.22)';ctx.lineWidth=14;ctx.lineCap='round';
-      for(const off of lanes){
-        if(Math.abs(off)>p.w*0.5-40)continue;
-        const bx=mid.x+lx*off,by=mid.y+ly*off;
-        for(const dist of [-250,-160]){
-          const ax=bx+Math.cos(ang)*dist,ay=by+Math.sin(ang)*dist;
+      ctx.lineCap='round';ctx.lineJoin='round';
+      ctx.strokeStyle='rgba(232,72,54,0.66)';
+      if(closedSide){
+        ctx.lineWidth=17;
+        const ax=lx*-closedSide,ay=ly*-closedSide;
+        for(const dist of [-360,-250]){
+          const bx=mid.x+Math.cos(ang)*dist,by=mid.y+Math.sin(ang)*dist;
+          const tipx=bx+ax*118,tipy=by+ay*118;
           ctx.beginPath();
-          ctx.moveTo(ax-Math.cos(ang+0.6)*46,ay-Math.sin(ang+0.6)*46);
-          ctx.lineTo(ax,ay);
-          ctx.lineTo(ax-Math.cos(ang-0.6)*46,ay-Math.sin(ang-0.6)*46);
+          ctx.moveTo(bx-ax*34,by-ay*34);
+          ctx.lineTo(tipx,tipy);
           ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(tipx-ax*52-Math.cos(ang)*44,tipy-ay*52-Math.sin(ang)*44);
+          ctx.lineTo(tipx,tipy);
+          ctx.lineTo(tipx-ax*52+Math.cos(ang)*44,tipy-ay*52+Math.sin(ang)*44);
+          ctx.stroke();
+        }
+      }else{
+        // one chevron per open lane, pointing the way you are going
+        const lanes = t.obsN===1
+          ? [-(OBS_R1+60), OBS_R1+60]                                    // either side of a centre block
+          : [-(OBS_OFFSET2+OBS_R2+38), 0, OBS_OFFSET2+OBS_R2+38];        // three lanes past a pair
+        ctx.lineWidth=16;
+        for(const off of lanes){
+          if(Math.abs(off)>p.w*0.5-40)continue;
+          const bx=mid.x+lx*off,by=mid.y+ly*off;
+          for(const dist of [-300,-205]){
+            const axp=bx+Math.cos(ang)*dist,ayp=by+Math.sin(ang)*dist;
+            ctx.beginPath();
+            ctx.moveTo(axp-Math.cos(ang+0.62)*50,ayp-Math.sin(ang+0.62)*50);
+            ctx.lineTo(axp,ayp);
+            ctx.lineTo(axp-Math.cos(ang-0.62)*50,ayp-Math.sin(ang-0.62)*50);
+            ctx.stroke();
+          }
         }
       }
       ctx.restore();
@@ -1492,13 +1608,16 @@ function drawLayer(){
       const r=o.r,rad=Math.min(10,r*0.3);
       ctx.save();ctx.translate(o.x,o.y);
       ctx.fillStyle='rgba(20,24,16,0.45)';
-      ctx.beginPath();ctx.ellipse(r*0.3,r*0.38,r*1.05,r*0.85,0,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();ctx.ellipse(r*0.3,r*0.38,r*1.12,r*0.9,0,0,Math.PI*2);ctx.fill();
+      // a wash of red on the tarmac around the base, so it shouts from far off
+      ctx.fillStyle='rgba(214,46,32,0.20)';
+      ctx.beginPath();ctx.arc(0,0,r*2.1,0,Math.PI*2);ctx.fill();
       ctx.rotate(ang);
-      ctx.fillStyle='#2a2a2e';
+      ctx.fillStyle='#d2372a';
       ctx.beginPath();ctx.roundRect(-r,-r,r*2,r*2,rad);ctx.fill();
       ctx.save();
       ctx.beginPath();ctx.roundRect(-r,-r,r*2,r*2,rad);ctx.clip();
-      ctx.strokeStyle='#e8b920';ctx.lineWidth=r*0.42;
+      ctx.strokeStyle='#f4f0e6';ctx.lineWidth=r*0.40;
       for(let i=-3;i<=3;i++){
         ctx.beginPath();
         ctx.moveTo(-r+i*r*0.62,r);
@@ -1506,7 +1625,7 @@ function drawLayer(){
         ctx.stroke();
       }
       ctx.restore();
-      ctx.strokeStyle='rgba(0,0,0,0.8)';ctx.lineWidth=Math.max(3,r*0.12);
+      ctx.strokeStyle='rgba(74,14,8,0.9)';ctx.lineWidth=Math.max(3,r*0.14);
       ctx.beginPath();ctx.roundRect(-r,-r,r*2,r*2,rad);ctx.stroke();
       ctx.fillStyle='rgba(255,255,255,0.16)';
       ctx.beginPath();ctx.roundRect(-r*0.8,-r*0.9,r*1.6,r*0.5,4);ctx.fill();
@@ -1766,6 +1885,14 @@ function drawScene(){
   drawParticles();
   drawGhost();
   drawOpponents();
+  if(car.boost>0.05&&!car.falling){
+    const bx=car.x-Math.cos(car.angle)*CAR_L*0.7,by=car.y-Math.sin(car.angle)*CAR_L*0.7;
+    const g=ctx.createRadialGradient(bx,by,0,bx,by,CAR_L*0.95);
+    g.addColorStop(0,`rgba(89,232,255,${0.55*car.boost})`);
+    g.addColorStop(1,'rgba(89,232,255,0)');
+    ctx.fillStyle=g;
+    ctx.beginPath();ctx.arc(bx,by,CAR_L*0.95,0,Math.PI*2);ctx.fill();
+  }
   drawRacer(car.x,car.y,car.angle,car.steerVisual,null,null,false,car.isBraking,
     car.falling?Math.max(0,car.fallAlpha):1);
   ctx.restore();
@@ -1829,12 +1956,13 @@ function showFinish(){
   const [t1,t2,t3]=getStarTimes(currentLevelIdx);
   const next=stars===0?t1:stars===1?t2:stars===2?t3:null;
   let nextBtn='';
-  if(currentLevelIdx+1<LEVEL_DATA.length&&stars>=1)
+  if(currentLevelIdx+1<LEVEL_DATA.length&&(stars>=1||currentLevelIdx===0))
     nextBtn=`<button class="ob" onclick="loadLevel(${currentLevelIdx+1})">Next circuit</button>`;
   ov.innerHTML=`
     <h1 style="font-size:clamp(26px,7vw,46px);color:#fff;letter-spacing:3px;">${isNewRecord?'New record':'Lap complete'}</h1>
     <div style="font-size:12px;color:#93a6ba;letter-spacing:3px;margin-top:4px;">${CIRCUIT_NAMES[currentLevelIdx]||''}</div>
-    <div style="margin:14px 0;">${starRow(stars,40)}</div>
+    ${currentLevelIdx===0?'<div style="font-size:12px;color:#7fe0ff;letter-spacing:3px;margin:10px 0;">PRACTICE RUN</div>'
+      :`<div style="margin:14px 0;">${starRow(stars,40)}</div>`}
     <div style="font-size:46px;color:#dff1ff;">${fmt(raceTime)}</div>
     ${next?`<div style="font-size:14px;color:#9fb8cc;margin:10px 0 20px;">${fmt(next)} for the next star</div>`
           :`<div style="font-size:14px;color:#7fffa8;margin:10px 0 20px;">All three stars</div>`}
@@ -1869,6 +1997,8 @@ function initMenu(){
   cam={x:mapCx,y:mapCy,angle:0.5,zoom:0.075};
   state='menu';
   const grid=document.getElementById('lvlGrid');grid.innerHTML='';
+  // The proving ground is always open and never gates the next circuit, so the
+  // chain of stars starts at Meadow Mile.
   let unlocked=true;
   for(let i=0;i<LEVEL_DATA.length;i++){
     const best=savedRecords[i];
@@ -1876,17 +2006,24 @@ function initMenu(){
     const [t1,t2,t3]=getStarTimes(i);
     const btn=document.createElement('div');
     btn.className='lvlBtn'+(unlocked?'':' locked');
-    btn.innerHTML=`<div class="lvlNo">${i+1}</div><div class="lvlBody">`
-      +`<div class="ln">${CIRCUIT_NAMES[i]||'CIRCUIT '+(i+1)}</div>`
-      +(unlocked
+    const practice=i===0;
+    if(practice)btn.className='lvlBtn';
+    btn.innerHTML=`<div class="lvlNo">${practice?'0':i}</div><div class="lvlBody">`
+      +`<div class="ln">${CIRCUIT_NAMES[i]||'CIRCUIT '+i}</div>`
+      +(practice
+        ?`<div class="lt" style="color:#7fe0ff;margin:3px 0 2px;">PRACTICE &middot; always open</div>
+          <div class="lt">turbo pads and slalom blocks, no stars at stake</div>
+          <div class="lt" style="color:#71839a;font-size:11px;">best ${fmt(best)}</div>`
+        :unlocked
         ?`<div style="margin:3px 0 2px;">${starRow(stars,15)}</div>
           <div class="lt">best ${fmt(best)}</div>
           <div class="lt" style="color:#71839a;font-size:11px;">stars at ${fmt(t1)} &middot; ${fmt(t2)} &middot; ${fmt(t3)}</div>`
-        :`<div class="lt">earn a star on the circuit above</div>`)
-      +`</div>`;
-    if(unlocked)btn.onclick=()=>loadLevel(i);
+        :`<div class="lt">earn a star on the circuit above</div>`);
+    btn.innerHTML+=`</div>`;
+    if(practice||unlocked)btn.onclick=()=>loadLevel(i);
     grid.appendChild(btn);
-    if(stars<1)unlocked=false;
+    // the proving ground is outside the chain: it neither needs nor grants a star
+    if(!practice&&stars<1)unlocked=false;
   }
   document.getElementById('lvlSel').style.display='flex';
 }
@@ -1895,10 +2032,12 @@ function mkSeq(tiles){
   return tiles.map(t=>{
     const f=(typeof t[2]==='string')?t[2]:'';
     const isObs=f.indexOf('O')>=0;
+    const isBoost=f.indexOf('T')>=0;      // "TR" / "TL" pick the half of the road
     return {entry:t[0],exit:t[1],
       isStart:f.indexOf('S')>=0,isFinish:f.indexOf('F')>=0,
       isNarrow:f.indexOf('N')>=0,isCross:f.indexOf('X')>=0,
-      isObs:isObs,
+      isObs:isObs,isBoost:isBoost,
+      boostSide:isBoost?(f.indexOf('L')>=0?-1:1):0,
       obsN:isObs?(t[3]===undefined?2:t[3]):0,
       obsSide:isObs?(t[4]===undefined?0:t[4]):0,
       // an obstacle tile reuses those two slots, so it has no crossing arms
@@ -2085,8 +2224,8 @@ function clearPRs(){
     savedGhosts=Array(LEVEL_DATA.length).fill(null);
     ghostPlay=null;ghostPose=null;ghostRec=[];
     try{
-      localStorage.removeItem('hexDriveRecords_v3');
-      localStorage.removeItem('hexDriveGhosts_v3');
+      localStorage.removeItem('hexDriveRecords_v4');
+      localStorage.removeItem('hexDriveGhosts_v4');
     }catch(e){}
     initMenu();
   }
