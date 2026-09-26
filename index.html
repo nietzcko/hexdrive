@@ -135,9 +135,23 @@ const CAR_REAR_AXLE   = CAR_L*0.32;
 // tiles where there was one — so their targets are scaled by the extra
 // distance. The rest keep the times calibrated from real laps.
 const STAR3_TIMES=[30800,9150,23000,26400,25600,23150,26300,33100,30100,46900,83650,28000];
-const getStarTimes=idx=>{
+// A circuit's three targets. By default they come from the 3-star time with
+// fixed ratios, but any tier can be overwritten by a lap you drove and saved,
+// which also becomes that tier's pace car.
+let starOverride={};
+try{ const o=localStorage.getItem('hexDriveStars_v1'); if(o)starOverride=JSON.parse(o); }catch(e){}
+function saveStarOverride(){ try{ localStorage.setItem('hexDriveStars_v1',JSON.stringify(starOverride)); }catch(e){} }
+function rawStarTimes(idx){
   const t3=STAR3_TIMES[idx]||20000;
-  return [Math.round(t3*1.24),Math.round(t3*1.10),t3];
+  const base=[Math.round(t3*1.24),Math.round(t3*1.10),t3];   // [1*, 2*, 3*]
+  const ov=starOverride[idx];
+  if(ov)for(let i=0;i<3;i++)if(typeof ov[i]==='number')base[i]=ov[i];
+  return base;
+}
+const getStarTimes=idx=>{
+  // Always hand back a sane ladder: slowest first. Saving an odd set of laps
+  // can't break the star logic, it just reorders them.
+  return rawStarTimes(idx).slice().sort((a,b)=>b-a);
 };
 const calcStars=(idx,time)=>{
   if(!time)return 0;
@@ -228,17 +242,17 @@ const LEVEL_DATA=[
   // "TR"/"TL" paint a boost pad down that half of the road; "O",2 is a pair,
   // "O",1,0 puts one in the middle, "O",1,side shuts that side. A tile can
   // carry both, e.g. "OTR", and a narrow lane can carry a pad, e.g. "NTL".
-  [[3,0,"S"],[3,0,"TR"],[3,0,"Y",1,"","TR"],[3,0,"O",2],[3,1],[4,2],[5,2,"TL"],[5,2,"O",1,1],[5,3],[0,3,"O",1,0],[0,3,"OTR",2],[0,4],[1,4],[1,5],[2,5,"F"]],
+  [[3,0,"S"],[3,0,"TR"],[3,0,"Y",1,"O","NTR"],[3,0,"O",2],[3,1],[4,2],[5,2,"TL"],[5,2,"O",1,1],[5,3],[0,3,"O",1,0],[0,3,"OTR",2],[0,4],[1,4],[1,5],[2,5,"F"]],
   // 1-10 — the circuits. Blocks go on the full-width straights, pads fill in
   // between, including out of the corners and down the narrow lanes.
   [[3,0,"S"],[3,0,"TR"],[3,0],[3,0,"TL"],[3,0,"F"]],
-  [[3,0,"S"],[3,0,"O",1,1],[3,1],[4,2],[5,2,"O",2],[5,3],[0,3,"Y",1,"TR",""],[0,4],[1,4],[1,5,"F"]],
-  [[3,0,"S"],[3,0,"O",2],[3,0,"Y",-1,"N",""],[3,1],[4,1,"O",1,-1],[4,2],[5,2,"TL"],[5,3],[0,4],[1,4],[1,5,"F"]],
-  [[3,0,"S"],[3,0,"Y",1,"TR","O"],[3,1],[4,5],[2,4],[1,4,"O",1,-1],[1,5],[2,1,"TL"],[4,0],[3,5],[2,0,"F"]],
+  [[3,0,"S"],[3,0,"O",1,1],[3,1],[4,2],[5,2,"O",2],[5,3],[0,3,"Y",1,"O","NTR"],[0,4],[1,4],[1,5,"F"]],
+  [[3,0,"S"],[3,0,"O",2],[3,0,"Y",-1,"O","NTL"],[3,1],[4,1,"O",1,-1],[4,2],[5,2,"TL"],[5,3],[0,4],[1,4],[1,5,"F"]],
+  [[3,0,"S"],[3,0,"Y",1,"O","NTR"],[3,1],[4,5],[2,4],[1,4,"O",1,-1],[1,5],[2,1,"TL"],[4,0],[3,5],[2,0,"F"]],
   [[3,0,"S"],[3,0,"X",4,1],[3,5,"TL"],[2,4],[1,3],[0,2,"TR"],[5,1],[4,1,"X",3,0],[4,2],[5,3],[0,4],[1,4,"F"]],
   [[3,0,"S"],[3,1,"N"],[4,5,"TR"],[2,4],[1,4,"O",2],[1,5],[2,1],[4,1,"O",1,0],[4,5],[2,4],[1,4,"F"]],
-  [[3,0,"S"],[3,1,"N"],[4,0,"NTL"],[3,4,"N"],[1,0,"N"],[3,0,"Y",1,"N","NTR"],[3,1,"N"],[4,1,"N"],[4,0,"N"],[3,5,"N"],[2,4,"N"],[1,2,"N"],[5,2,"F"]],
-  [[3,0,"S"],[3,0,"O",1,1],[3,0,"Y",-1,"","TL"],[3,0,"X",4,1],[3,5,"TR"],[2,4],[1,3],[0,2,"TL"],[5,1],[4,1,"X",3,0],[4,0],[3,0,"O",2],[3,5],[2,0,"F"]],
+  [[3,0,"S"],[3,1,"N"],[4,0,"NTL"],[3,4,"N"],[1,0,"N"],[3,0,"Y",1,"O","NTR"],[3,1,"N"],[4,1,"N"],[4,0,"N"],[3,5,"N"],[2,4,"N"],[1,2,"N"],[5,2,"F"]],
+  [[3,0,"S"],[3,0,"O",1,1],[3,0,"Y",-1,"O","NTL"],[3,0,"X",4,1],[3,5,"TR"],[2,4],[1,3],[0,2,"TL"],[5,1],[4,1,"X",3,0],[4,0],[3,0,"O",2],[3,5],[2,0,"F"]],
   [[3,0,"S"],[3,2],[5,3],[0,3,"O",2],[0,1],[4,0,"TL"],[3,2],[5,3,"N"],[0,3,"NTR"],[0,5,"N"],[2,3],[0,2,"TL"],[5,1],[4,0],[3,0,"O",1,-1],[3,2],[5,0,"TR"],[3,5],[2,1],[4,2],[5,3],[0,3,"F"]],
   [[3,0,"S"],[3,0,"O",1,-1],[3,4],[1,3],[0,3,"O",1,0],[0,2],[5,2,"TR"],[5,0],[3,0,"O",2],[3,1],[4,3],[0,3,"O",1,0],[0,3],[0,1,"TL"],[4,0],[3,0,"O",1,1],[3,0],[3,2,"TR"],[5,3],[0,3,"O",2],[0,3],[0,2,"NTL"],[5,0,"N"],[3,0,"N"],[3,0,"NTR"],[3,1,"N"],[4,3,"N"],[0,3,"NTL"],[0,3,"N"],[0,2,"N"],[5,2,"F"]],
   // 11 — SLALOM: nothing but blocks and pads, back to back.
@@ -519,30 +533,46 @@ function buildTrack(){
   // Branch tiles are tagged with the same flag letters as a normal tile, so a
   // fork can offer a narrow line against an open one, or a slalom against a
   // clear run.
-  function branchFlags(str){
+  function branchFlags(str,last){
     const f=str||'';
     const o={mandatory:false};
     if(f.indexOf('N')>=0)o.isNarrow=true;
     if(f.indexOf('O')>=0){o.isObs=true;o.obsN=2;o.obsSide=0;}
-    if(f.indexOf('T')>=0){o.isBoost=true;o.boostSide=(f.indexOf('L')>=0?-1:1);}
+    // one pad per branch, on its last tile
+    if(f.indexOf('T')>=0&&last!==false){o.isBoost=true;o.boostSide=(f.indexOf('L')>=0?-1:1);}
     return o;
   }
   for(let i=0;i<SEQ.length;i++){
     const s=SEQ[i];
     if(s.isFork){
-      // A Y: one entry, two exits, two equal-length branches, then a merge.
-      // Both routes cover exactly the same ground, so either is a fair lap.
+      // A Y: one entry, two exits, then a merge. Either route completes the lap.
+      //   normal  - both branches one tile, so the two routes are the same length
+      //   long    - the second branch runs two tiles, 50% further than the first,
+      //             which is what lets a detour pay for itself with a turbo pad
       const e1=OPP(s.entry);                 // straight on
       const e2=(e1+s.forkDir+6)%6;           // 60 degrees across
       const A=neighborCenter(cx,cy,e1);
-      const B=neighborCenter(cx,cy,e2);
-      const M=neighborCenter(A.x,A.y,e2);    // the same cell as B across e1
+      const M=neighborCenter(A.x,A.y,e2);
       push(cx,cy,[{entry:s.entry,exit:e1},{entry:s.entry,exit:e2}],s,
         {isFork:true,isStart:s.isStart});
-      push(A.x,A.y,[{entry:OPP(e1),exit:e2}],null,branchFlags(s.forkLeft));
-      push(B.x,B.y,[{entry:OPP(e2),exit:e1}],null,branchFlags(s.forkRight));
-      push(M.x,M.y,[{entry:OPP(e2),exit:e1},{entry:OPP(e1),exit:e1}],null,
-        {isMerge:true});
+      push(A.x,A.y,[{entry:OPP(e1),exit:e2}],null,branchFlags(s.forkLeft,true));
+      let mergeArms;
+      if(s.forkLong){
+        const e3=(e1-s.forkDir+6)%6;         // the hop that closes the detour
+        const B1=neighborCenter(cx,cy,e2);
+        const B2=neighborCenter(B1.x,B1.y,e2);
+        // A detour is 50% further and ends on a 120 degree turn, which costs
+        // real time — so it is boosted the whole way, not just at the end.
+        // Without that nobody would ever take it.
+        push(B1.x,B1.y,[{entry:OPP(e2),exit:e2}],null,branchFlags(s.forkRight,true));
+        push(B2.x,B2.y,[{entry:OPP(e2),exit:e3}],null,branchFlags(s.forkRight,true));
+        mergeArms=[{entry:OPP(e2),exit:e1},{entry:OPP(e3),exit:e1}];
+      }else{
+        const B=neighborCenter(cx,cy,e2);
+        push(B.x,B.y,[{entry:OPP(e2),exit:e1}],null,branchFlags(s.forkRight,true));
+        mergeArms=[{entry:OPP(e2),exit:e1},{entry:OPP(e1),exit:e1}];
+      }
+      push(M.x,M.y,mergeArms,null,{isMerge:true});
       const nc=neighborCenter(M.x,M.y,e1);cx=nc.x;cy=nc.y;
       continue;
     }
@@ -1099,24 +1129,108 @@ const OPPONENTS=[
 const OPP_ACCEL_T=1.2;
 let oppLine=null,oppPoses=[],oppActive=null;
 function buildOpponentLine(){
-  const xs=[],ys=[];
   if(!trackTiles.length){oppLine=null;return;}
   const path=canonicalPath();
-  for(let k=0;k<path.length-1;k++){
-    const bz=armBez(path[k].tile,path[k].arm);
-    const from=k===0?20:1;
-    for(let i=from;i<=40;i++){const p=bezPt(i/40,bz.p0,bz.cp1,bz.cp2,bz.p3);xs.push(p.x);ys.push(p.y);}
+  // 1. the line itself, nudged sideways to take an open lane past any blocks
+  const xs=[],ys=[];
+  function laneOffset(t){
+    if(!t.isObs||!t._obs||!t._obs.length)return 0;
+    const half=roadWidthOf(t)/2;
+    let off;
+    if(t.obsN===1) off = t.obsSide ? -t.obsSide*(OBS_SIDE_OFFSET+OBS_R1*0.0+56) : (OBS_R1+58);
+    else off = 0;                                   // straight through the middle
+    const lim=half-52;
+    return Math.max(-lim,Math.min(lim,off));
   }
-  const n=xs.length,cum=new Float64Array(n);
+  for(let k=0;k<path.length-1;k++){
+    const {tile,arm}=path[k];
+    const bz=armBez(tile,arm);
+    const offA=laneOffset(tile);
+    const offB=k+1<path.length?laneOffset(path[k+1].tile):0;
+    const from=k===0?20:1;
+    for(let i=from;i<=40;i++){
+      const u=i/40;
+      const p=bezPt(u,bz.p0,bz.cp1,bz.cp2,bz.p3);
+      const a=bezPt(Math.max(0,u-0.02),bz.p0,bz.cp1,bz.cp2,bz.p3);
+      const b=bezPt(Math.min(1,u+0.02),bz.p0,bz.cp1,bz.cp2,bz.p3);
+      const ang=Math.atan2(b.y-a.y,b.x-a.x);
+      // ease from this tile's lane to the next one's across the second half
+      const off=offA+(offB-offA)*Math.max(0,(u-0.55)/0.45);
+      xs.push(p.x+Math.cos(ang+Math.PI/2)*off);
+      ys.push(p.y+Math.sin(ang+Math.PI/2)*off);
+    }
+  }
+  const n=xs.length;
+  if(n<3){oppLine=null;return;}
+  const cum=new Float64Array(n);
   for(let i=1;i<n;i++)cum[i]=cum[i-1]+Math.hypot(xs[i]-xs[i-1],ys[i]-ys[i-1]);
-  oppLine={xs:xs,ys:ys,cum:cum,total:cum[n-1]||1};
+  const total=cum[n-1]||1;
+
+  // 2. how fast the line can be taken: the tightest arc each point sits on,
+  //    converted to the speed the car could actually hold there
+  function vForRadius(r){
+    let lo=0,hi=MAX_ROAD;
+    for(let i=0;i<26;i++){
+      const v=(lo+hi)/2;
+      if(v/steerRateAt(v)>r)hi=v;else lo=v;
+    }
+    return lo;
+  }
+  const v=new Float64Array(n);
+  for(let i=0;i<n;i++){
+    const a=i>1?i-2:0,b=i,c=i<n-2?i+2:n-1;
+    const A=Math.hypot(xs[b]-xs[a],ys[b]-ys[a]);
+    const B=Math.hypot(xs[c]-xs[b],ys[c]-ys[b]);
+    const C=Math.hypot(xs[c]-xs[a],ys[c]-ys[a]);
+    const area=Math.abs((xs[b]-xs[a])*(ys[c]-ys[a])-(xs[c]-xs[a])*(ys[b]-ys[a]))/2;
+    const r=area<1e-6?1e9:(A*B*C)/(4*area);
+    v[i]=Math.min(MAX_ROAD,vForRadius(r));
+  }
+  // 3. they can't jump between those speeds: roll the limit forwards under
+  //    acceleration and backwards under braking, which is what puts a real
+  //    braking zone before each corner and a drive out of it
+  const A_ACC=620,A_BRK=1500;
+  v[0]=0;
+  for(let i=1;i<n;i++){
+    const ds=Math.max(1,cum[i]-cum[i-1]);
+    v[i]=Math.min(v[i],Math.sqrt(v[i-1]*v[i-1]+2*A_ACC*ds));
+  }
+  for(let i=n-2;i>=0;i--){
+    const ds=Math.max(1,cum[i+1]-cum[i]);
+    v[i]=Math.min(v[i],Math.sqrt(v[i+1]*v[i+1]+2*A_BRK*ds));
+  }
+  // 4. turn that into a time along the lap, stored as a fraction of the whole,
+  //    so the same shape can be stretched onto any star target exactly
+  const tf=new Float64Array(n);
+  for(let i=1;i<n;i++){
+    const ds=cum[i]-cum[i-1];
+    const vm=Math.max(30,(v[i]+v[i-1])*0.5);
+    tf[i]=tf[i-1]+ds/vm;
+  }
+  const totT=tf[n-1]||1;
+  for(let i=0;i<n;i++)tf[i]/=totT;
+  oppLine={xs:xs,ys:ys,cum:cum,total:total,tf:tf,n:n};
 }
-function oppDistance(tSec,target,total){
-  const T=target/1000,Ta=Math.min(OPP_ACCEL_T,T*0.5);
-  const vmax=total/(T-Ta/2);
-  if(tSec<=0)return 0;
-  if(tSec<Ta)return vmax*tSec*tSec/(2*Ta);
-  return vmax*Ta/2+vmax*(tSec-Ta);
+// Where the pace car is at this moment: look its lap fraction up in the time
+// table, so it brakes and accelerates like a driver but still crosses the line
+// on its target to the millisecond.
+function oppPoseAt(frac){
+  const L=oppLine;
+  if(!L)return null;
+  const n=L.n;
+  if(frac>=1){
+    const i=n-1;
+    return {x:L.xs[i],y:L.ys[i],angle:Math.atan2(L.ys[i]-L.ys[i-1],L.xs[i]-L.xs[i-1]),done:true};
+  }
+  const f=Math.max(0,frac);
+  let lo=0,hi=n-1;
+  while(lo<hi-1){const mid=(lo+hi)>>1;if(L.tf[mid]<=f)lo=mid;else hi=mid;}
+  const seg=L.tf[hi]-L.tf[lo];
+  const g=seg>0?(f-L.tf[lo])/seg:0;
+  const i2=Math.min(n-1,hi+1),i1=Math.max(0,lo-1);
+  return {x:L.xs[lo]+(L.xs[hi]-L.xs[lo])*g,
+          y:L.ys[lo]+(L.ys[hi]-L.ys[lo])*g,
+          angle:Math.atan2(L.ys[i2]-L.ys[i1],L.xs[i2]-L.xs[i1]),done:false};
 }
 function pickOpponent(){
   const stars=calcStars(currentLevelIdx,savedRecords[currentLevelIdx]);
@@ -1125,23 +1239,83 @@ function pickOpponent(){
   const o=OPPONENTS.find(x=>x.tier===wantTier);
   if(!o){oppActive=null;return;}
   const times=getStarTimes(currentLevelIdx);
-  oppActive=Object.assign({},o,{target:wantTier===3?times[2]:wantTier===2?times[1]:times[0]});
+  const target=wantTier===3?times[2]:wantTier===2?times[1]:times[0];
+  // a lap you recorded for this tier beats the simulated one
+  const rec=getPace(currentLevelIdx,wantTier);
+  oppActive=Object.assign({},o,{target:target,rec:rec});
 }
 function oppUpdate(){
   oppPoses=[];
-  if(!oppLine||!oppActive)return;
-  const {xs,ys,cum,total}=oppLine;
-  const n=xs.length;
-  const d=oppDistance(raceTime/1000,oppActive.target,total);
-  const done=d>=total,dd=Math.min(d,total);
-  let lo=0,hi=n-1;
-  while(lo<hi-1){const mid=(lo+hi)>>1;if(cum[mid]<=dd)lo=mid;else hi=mid;}
-  const seg=cum[hi]-cum[lo];
-  const f=seg>0?(dd-cum[lo])/seg:0;
-  const i2=Math.min(n-1,hi+1),i1=Math.max(0,lo-1);
-  oppPoses.push({x:xs[lo]+(xs[hi]-xs[lo])*f,y:ys[lo]+(ys[hi]-ys[lo])*f,
-    angle:Math.atan2(ys[i2]-ys[i1],xs[i2]-xs[i1]),done:done,
+  if(!oppActive)return;
+  const rec=oppActive.rec;
+  if(rec&&rec.length>=6){
+    // a lap you drove yourself, replayed pose for pose
+    const n=rec.length/3,pos=raceTime/GHOST_DT;
+    let i0=Math.floor(pos),f=pos-i0;
+    if(i0>=n-1){i0=n-1;f=0;}
+    const i1=Math.min(i0+1,n-1);
+    const a0=rec[i0*3+2];
+    const da=wrapA(rec[i1*3+2]-a0);
+    oppPoses.push({x:rec[i0*3]+(rec[i1*3]-rec[i0*3])*f,
+      y:rec[i0*3+1]+(rec[i1*3+1]-rec[i0*3+1])*f,
+      angle:a0+da*f,done:i0>=n-1,
+      label:oppActive.label,body:oppActive.body,accent:oppActive.accent});
+    return;
+  }
+  if(!oppLine)return;
+  const p=oppPoseAt(raceTime/oppActive.target);
+  if(!p)return;
+  oppPoses.push({x:p.x,y:p.y,angle:p.angle,done:p.done,
     label:oppActive.label,body:oppActive.body,accent:oppActive.accent});
+}
+
+
+// ── PACE CARS AND STAR TIMES (development) ───────────
+// Drive a lap, then save it as one of the three star targets. That lap becomes
+// both the target time and the pace car you race against, so a star is always
+// something a human actually drove.
+let paceRec={};
+try{ const r=localStorage.getItem('hexDrivePace_v1'); if(r)paceRec=JSON.parse(r); }catch(e){}
+function savePace(){ try{ localStorage.setItem('hexDrivePace_v1',JSON.stringify(paceRec)); }catch(e){} }
+function paceKey(lvl,tier){ return lvl+':'+tier; }
+function getPace(lvl,tier){ const p=paceRec[paceKey(lvl,tier)]; return p&&p.d?p.d:null; }
+function getPaceTime(lvl,tier){ const p=paceRec[paceKey(lvl,tier)]; return p?p.t:null; }
+
+let devMode=false;
+try{ devMode=localStorage.getItem('hexDriveDev_v1')==='1'; }catch(e){}
+function setDev(on){
+  devMode=!!on;
+  try{ localStorage.setItem('hexDriveDev_v1',devMode?'1':'0'); }catch(e){}
+  buildTuneList();
+  doFlash(devMode?'DEV MODE ON \u00b7 ALL CIRCUITS OPEN':'DEV MODE OFF','#7fe0ff');
+}
+// the lap just completed, held so the finish screen can offer to save it
+let lastLap=null;
+function saveLapAsStar(tier){
+  if(!lastLap)return;
+  const lvl=currentLevelIdx;
+  paceRec[paceKey(lvl,tier)]={t:lastLap.t,d:lastLap.d.slice()};
+  savePace();
+  if(!starOverride[lvl])starOverride[lvl]=[null,null,null];
+  starOverride[lvl][tier-1]=lastLap.t;
+  saveStarOverride();
+  doFlash('SAVED AS '+tier+'\u2605 \u00b7 '+fmt(lastLap.t),'#59e8ff');
+  showFinish();                     // redraw so the new targets show
+}
+function clearStar(lvl,tier){
+  delete paceRec[paceKey(lvl,tier)];
+  if(starOverride[lvl])starOverride[lvl][tier-1]=null;
+  if(starOverride[lvl]&&starOverride[lvl].every(x=>x===null))delete starOverride[lvl];
+  savePace();saveStarOverride();
+  buildTuneList();
+}
+function starSource(lvl,tier){
+  const ov=starOverride[lvl];
+  const hasT=ov&&typeof ov[tier-1]==='number';
+  const hasCar=!!getPace(lvl,tier);
+  if(hasT&&hasCar)return 'recorded lap';
+  if(hasT)return 'set by hand';
+  return 'derived';
 }
 
 // ── STATE AND INPUT ──────────────────────────────────
@@ -1478,6 +1652,8 @@ function update(ts){
         savedGhosts[currentLevelIdx]=ghostRec.slice();
         saveGhosts();
       }
+      ghostRecord();
+      lastLap={t:Math.round(raceTime),d:ghostRec.slice()};
       doFlash(isNewRecord?'NEW RECORD':'FINISH','#ffd23f');
       setTimeout(showFinish,600);
     }
@@ -2094,7 +2270,7 @@ function showFinish(){
   const [t1,t2,t3]=getStarTimes(currentLevelIdx);
   const next=stars===0?t1:stars===1?t2:stars===2?t3:null;
   let nextBtn='';
-  if(currentLevelIdx+1<LEVEL_DATA.length&&(stars>=1||currentLevelIdx===0))
+  if(currentLevelIdx+1<LEVEL_DATA.length&&(stars>=1||currentLevelIdx===0||devMode))
     nextBtn=`<button class="ob" onclick="loadLevel(${currentLevelIdx+1})">Next circuit</button>`;
   ov.innerHTML=`
     <h1 style="font-size:clamp(26px,7vw,46px);color:#fff;letter-spacing:3px;">${isNewRecord?'New record':'Lap complete'}</h1>
@@ -2108,8 +2284,38 @@ function showFinish(){
       <button class="ob" onclick="loadLevel(${currentLevelIdx})">Retry</button>
       ${nextBtn}
       <button class="ob" onclick="initMenu()">Circuits</button>
-    </div>`;
+    </div>
+    ${devMode?devSaveBlock():''}`;
   ov.style.display='flex';
+}
+
+
+// The dev block under the finish screen: what each star currently demands, and
+// a button to replace it with the lap you just drove.
+function devSaveBlock(){
+  const raw=rawStarTimes(currentLevelIdx);
+  const lap=lastLap?lastLap.t:null;
+  const rows=[1,2,3].map(tier=>{
+    const cur=raw[tier-1];
+    const src=starSource(currentLevelIdx,tier);
+    const faster=lap!==null&&lap<cur;
+    return `<div style="display:flex;align-items:center;gap:10px;margin:5px 0;">
+      <div style="min-width:52px;text-align:right;color:#ffd23f;">${'\u2605'.repeat(tier)}</div>
+      <div style="min-width:104px;color:#dff1ff;font-variant-numeric:tabular-nums;">${fmt(cur)}</div>
+      <div style="min-width:86px;font-size:11px;color:#71839a;">${src}</div>
+      <button class="ob" style="padding:6px 12px;font-size:12px;${faster?'border:1px solid #7fffa8;':''}"
+        onclick="saveLapAsStar(${tier})">Save this lap</button>
+    </div>`;
+  }).join('');
+  return `<div style="margin-top:22px;padding:14px 16px;border:1px solid rgba(127,224,255,0.28);
+      border-radius:10px;background:rgba(8,14,26,0.7);max-width:430px;">
+    <div style="font-size:11px;letter-spacing:3px;color:#7fe0ff;margin-bottom:8px;">DEV &middot; STAR TIMES</div>
+    <div style="font-size:11px;color:#8896a8;line-height:1.5;margin-bottom:10px;">
+      This lap: <span style="color:#dff1ff;">${fmt(lap)}</span>. Saving it sets that star's
+      target and makes this lap its pace car.
+    </div>
+    ${rows}
+  </div>`;
 }
 
 function hideRaceUI(){
@@ -2143,22 +2349,25 @@ function initMenu(){
     const stars=calcStars(i,best);
     const [t1,t2,t3]=getStarTimes(i);
     const btn=document.createElement('div');
-    btn.className='lvlBtn'+(unlocked?'':' locked');
     const practice=i===0;
-    if(practice)btn.className='lvlBtn';
+    // Dev mode opens every circuit, so you can go straight to the one you are
+    // working on without driving the chain first.
+    const open=practice||unlocked||devMode;
+    btn.className='lvlBtn'+(open?'':' locked');
     btn.innerHTML=`<div class="lvlNo">${practice?'0':i}</div><div class="lvlBody">`
       +`<div class="ln">${CIRCUIT_NAMES[i]||'CIRCUIT '+i}</div>`
       +(practice
         ?`<div class="lt" style="color:#7fe0ff;margin:3px 0 2px;">PRACTICE &middot; always open</div>
           <div class="lt">turbo pads and slalom blocks, no stars at stake</div>
           <div class="lt" style="color:#71839a;font-size:11px;">best ${fmt(best)}</div>`
-        :unlocked
+        :open
         ?`<div style="margin:3px 0 2px;">${starRow(stars,15)}</div>
           <div class="lt">best ${fmt(best)}</div>
-          <div class="lt" style="color:#71839a;font-size:11px;">stars at ${fmt(t1)} &middot; ${fmt(t2)} &middot; ${fmt(t3)}</div>`
+          <div class="lt" style="color:#71839a;font-size:11px;">stars at ${fmt(t1)} &middot; ${fmt(t2)} &middot; ${fmt(t3)}</div>
+          ${(!unlocked&&devMode)?'<div class="lt" style="color:#7fe0ff;font-size:11px;">open in dev mode</div>':''}`
         :`<div class="lt">earn a star on the circuit above</div>`);
     btn.innerHTML+=`</div>`;
-    if(practice||unlocked)btn.onclick=()=>loadLevel(i);
+    if(open)btn.onclick=()=>loadLevel(i);
     grid.appendChild(btn);
     // the proving ground is outside the chain: it neither needs nor grants a star
     if(!practice&&stars<1)unlocked=false;
@@ -2179,6 +2388,7 @@ function mkSeq(tiles){
       forkDir:(f.indexOf('Y')>=0)?((t[3]===undefined?1:t[3])<0?-1:1):0,
       forkLeft:(f.indexOf('Y')>=0)?(t[4]||''):'',
       forkRight:(f.indexOf('Y')>=0)?(t[5]||''):'',
+      forkLong:(f.indexOf('Y')>=0)?!!t[6]:false,
       boostSide:isBoost?(f.indexOf('L')>=0?-1:1):0,
       obsN:(isObs&&f.indexOf('Y')<0)?(t[3]===undefined?2:t[3]):0,
       obsSide:isObs?(t[4]===undefined?0:t[4]):0,
@@ -2332,6 +2542,95 @@ function buildTuneList(){
     row.appendChild(inp);box.appendChild(row);
   }
   document.getElementById('tuneCurve').innerHTML=tuneCurveText();
+  buildPaceList();
+}
+// Development tools: a switch, and the star table for this circuit.
+function buildPaceList(){
+  const box=document.getElementById('tuneList');
+  if(!box)return;
+  const h=document.createElement('div');
+  h.style.cssText='font-size:12px;letter-spacing:2px;color:#ffd23f;margin:18px 0 6px;';
+  h.textContent='Development';
+  box.appendChild(h);
+
+  const row=document.createElement('div');
+  row.style.cssText='display:flex;align-items:center;gap:10px;margin-bottom:8px;';
+  const lab=document.createElement('div');
+  lab.style.cssText='flex:1;font-size:13px;color:#e0f4ff;';
+  lab.textContent='Dev mode';
+  const tog=document.createElement('button');
+  tog.className='ob';
+  tog.style.cssText='padding:7px 14px;font-size:12px;'+(devMode?'background:#ffd23f;color:#10141f;':'');
+  tog.textContent=devMode?'On':'Off';
+  tog.onclick=()=>setDev(!devMode);
+  row.appendChild(lab);row.appendChild(tog);
+  box.appendChild(row);
+
+  const note=document.createElement('div');
+  note.style.cssText='font-size:11px;color:#8896a8;line-height:1.55;margin-bottom:10px;';
+  note.textContent=devMode
+    ? 'After a lap the finish screen offers to save it as a star time. The saved lap becomes both the target and that star\u2019s pace car.'
+    : 'Turn on to save your laps as star times from the finish screen.';
+  box.appendChild(note);
+  if(!devMode)return;
+
+  const t=document.createElement('div');
+  t.style.cssText='font-size:12px;letter-spacing:2px;color:#ffd23f;margin:10px 0 6px;';
+  t.textContent=(CIRCUIT_NAMES[currentLevelIdx]||'Circuit')+' targets';
+  box.appendChild(t);
+
+  const raw=rawStarTimes(currentLevelIdx);
+  const ordered=raw.slice().sort((a,b)=>b-a);
+  const outOfOrder=raw.some((v,i)=>v!==ordered[i]);
+  for(const tier of [1,2,3]){
+    const r=document.createElement('div');
+    r.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:6px;';
+    const st=document.createElement('div');
+    st.style.cssText='min-width:52px;color:#ffd23f;font-size:13px;';
+    st.textContent='\u2605'.repeat(tier);
+    const tm=document.createElement('div');
+    tm.style.cssText='min-width:96px;font-size:13px;color:#dff1ff;font-variant-numeric:tabular-nums;';
+    tm.textContent=fmt(raw[tier-1]);
+    const src=document.createElement('div');
+    const source=starSource(currentLevelIdx,tier);
+    src.style.cssText='flex:1;font-size:11px;color:'+(source==='derived'?'#71839a':'#7fe0ff')+';';
+    src.textContent=source+(getPace(currentLevelIdx,tier)?' \u00b7 pace car':'');
+    r.appendChild(st);r.appendChild(tm);r.appendChild(src);
+    if(source!=='derived'){
+      const d=document.createElement('button');
+      d.className='ob';
+      d.style.cssText='padding:6px 10px;font-size:12px;background:rgba(120,0,0,0.6);';
+      d.textContent='\u2715';
+      d.onclick=()=>clearStar(currentLevelIdx,tier);
+      r.appendChild(d);
+    }
+    box.appendChild(r);
+  }
+  if(outOfOrder){
+    const w=document.createElement('div');
+    w.style.cssText='font-size:11px;color:#ff9c6b;line-height:1.5;margin:4px 0 8px;';
+    w.textContent='These are not in order (1\u2605 should be the slowest). The game sorts them before awarding stars, so the ladder still works.';
+    box.appendChild(w);
+  }
+  const cp=document.createElement('button');
+  cp.className='ob';
+  cp.style.cssText='padding:8px 14px;font-size:12px;margin-top:6px;';
+  cp.textContent='Copy all star times';
+  cp.onclick=()=>{
+    const lines=[];
+    for(let l=0;l<LEVEL_DATA.length;l++){
+      const rr=rawStarTimes(l);
+      lines.push('L'+String(l).padStart(2)+' '+(CIRCUIT_NAMES[l]||'').padEnd(16)+
+        ' 1\u2605 '+fmt(rr[0])+'  2\u2605 '+fmt(rr[1])+'  3\u2605 '+fmt(rr[2])+
+        (starOverride[l]?'   (saved: '+[1,2,3].filter(x=>typeof (starOverride[l]||[])[x-1]==='number').join(',')+')':''));
+    }
+    lines.push('');
+    lines.push('starOverride='+JSON.stringify(starOverride)+';');
+    const txt=lines.join('\n');
+    try{navigator.clipboard.writeText(txt);doFlash('TIMES COPIED','#ffd23f');}
+    catch(e){console.log(txt);doFlash('SEE CONSOLE','#ffcc00');}
+  };
+  box.appendChild(cp);
 }
 let _tunePrev=null;
 function openTune(){
@@ -2365,9 +2664,12 @@ function clearPRs(){
     savedRecords=Array(LEVEL_DATA.length).fill(null);
     savedGhosts=Array(LEVEL_DATA.length).fill(null);
     ghostPlay=null;ghostPose=null;ghostRec=[];
+    paceRec={};starOverride={};lastLap=null;
     try{
       localStorage.removeItem('hexDriveRecords_v4');
       localStorage.removeItem('hexDriveGhosts_v4');
+      localStorage.removeItem('hexDrivePace_v1');
+      localStorage.removeItem('hexDriveStars_v1');
     }catch(e){}
     initMenu();
   }
