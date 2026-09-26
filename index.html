@@ -131,7 +131,10 @@ const CAR_REAR_AXLE   = CAR_L*0.32;
 // ── STAR TIMES ───────────────────────────────────────
 // Calibrated against real human times on the default physics: three stars is a
 // near-perfect lap, one star opens the next circuit.
-const STAR3_TIMES=[25500,9150,17300,22550,19350,23150,26300,26000,26500,46900,83650,28000];
+// Circuits that gained a Y are longer now — a fork routes you through three
+// tiles where there was one — so their targets are scaled by the extra
+// distance. The rest keep the times calibrated from real laps.
+const STAR3_TIMES=[30800,9150,23000,26400,25600,23150,26300,33100,30100,46900,83650,28000];
 const getStarTimes=idx=>{
   const t3=STAR3_TIMES[idx]||20000;
   return [Math.round(t3*1.24),Math.round(t3*1.10),t3];
@@ -225,17 +228,17 @@ const LEVEL_DATA=[
   // "TR"/"TL" paint a boost pad down that half of the road; "O",2 is a pair,
   // "O",1,0 puts one in the middle, "O",1,side shuts that side. A tile can
   // carry both, e.g. "OTR", and a narrow lane can carry a pad, e.g. "NTL".
-  [[3,0,"S"],[3,0,"TR"],[3,0,"O",2],[3,1],[4,2],[5,2,"TL"],[5,2,"O",1,1],[5,3],[0,3,"O",1,0],[0,3,"OTR",2],[0,4],[1,4],[1,5],[2,5,"F"]],
+  [[3,0,"S"],[3,0,"TR"],[3,0,"Y",1,"","TR"],[3,0,"O",2],[3,1],[4,2],[5,2,"TL"],[5,2,"O",1,1],[5,3],[0,3,"O",1,0],[0,3,"OTR",2],[0,4],[1,4],[1,5],[2,5,"F"]],
   // 1-10 — the circuits. Blocks go on the full-width straights, pads fill in
   // between, including out of the corners and down the narrow lanes.
   [[3,0,"S"],[3,0,"TR"],[3,0],[3,0,"TL"],[3,0,"F"]],
-  [[3,0,"S"],[3,0,"O",1,1],[3,1],[4,2],[5,2,"O",2],[5,3],[0,4,"TR"],[1,4],[1,5,"F"]],
-  [[3,0,"S"],[3,0,"O",2],[3,0],[3,1],[4,1,"O",1,-1],[4,2],[5,2,"TL"],[5,3],[0,4],[1,4],[1,5,"F"]],
-  [[3,0,"S"],[3,1],[4,5,"TR"],[2,4],[1,4,"O",1,-1],[1,5],[2,1,"TL"],[4,0],[3,5],[2,0,"F"]],
+  [[3,0,"S"],[3,0,"O",1,1],[3,1],[4,2],[5,2,"O",2],[5,3],[0,3,"Y",1,"TR",""],[0,4],[1,4],[1,5,"F"]],
+  [[3,0,"S"],[3,0,"O",2],[3,0,"Y",-1,"N",""],[3,1],[4,1,"O",1,-1],[4,2],[5,2,"TL"],[5,3],[0,4],[1,4],[1,5,"F"]],
+  [[3,0,"S"],[3,0,"Y",1,"TR","O"],[3,1],[4,5],[2,4],[1,4,"O",1,-1],[1,5],[2,1,"TL"],[4,0],[3,5],[2,0,"F"]],
   [[3,0,"S"],[3,0,"X",4,1],[3,5,"TL"],[2,4],[1,3],[0,2,"TR"],[5,1],[4,1,"X",3,0],[4,2],[5,3],[0,4],[1,4,"F"]],
   [[3,0,"S"],[3,1,"N"],[4,5,"TR"],[2,4],[1,4,"O",2],[1,5],[2,1],[4,1,"O",1,0],[4,5],[2,4],[1,4,"F"]],
-  [[3,0,"S"],[3,1,"N"],[4,0,"NTL"],[3,4,"N"],[1,0,"N"],[3,1,"NTR"],[4,1,"N"],[4,0,"N"],[3,5,"N"],[2,4,"N"],[1,2,"N"],[5,2,"F"]],
-  [[3,0,"S"],[3,0,"O",1,1],[3,0],[3,0,"X",4,1],[3,5,"TR"],[2,4],[1,3],[0,2,"TL"],[5,1],[4,1,"X",3,0],[4,0],[3,0,"O",2],[3,5],[2,0,"F"]],
+  [[3,0,"S"],[3,1,"N"],[4,0,"NTL"],[3,4,"N"],[1,0,"N"],[3,0,"Y",1,"N","NTR"],[3,1,"N"],[4,1,"N"],[4,0,"N"],[3,5,"N"],[2,4,"N"],[1,2,"N"],[5,2,"F"]],
+  [[3,0,"S"],[3,0,"O",1,1],[3,0,"Y",-1,"","TL"],[3,0,"X",4,1],[3,5,"TR"],[2,4],[1,3],[0,2,"TL"],[5,1],[4,1,"X",3,0],[4,0],[3,0,"O",2],[3,5],[2,0,"F"]],
   [[3,0,"S"],[3,2],[5,3],[0,3,"O",2],[0,1],[4,0,"TL"],[3,2],[5,3,"N"],[0,3,"NTR"],[0,5,"N"],[2,3],[0,2,"TL"],[5,1],[4,0],[3,0,"O",1,-1],[3,2],[5,0,"TR"],[3,5],[2,1],[4,2],[5,3],[0,3,"F"]],
   [[3,0,"S"],[3,0,"O",1,-1],[3,4],[1,3],[0,3,"O",1,0],[0,2],[5,2,"TR"],[5,0],[3,0,"O",2],[3,1],[4,3],[0,3,"O",1,0],[0,3],[0,1,"TL"],[4,0],[3,0,"O",1,1],[3,0],[3,2,"TR"],[5,3],[0,3,"O",2],[0,3],[0,2,"NTL"],[5,0,"N"],[3,0,"N"],[3,0,"NTR"],[3,1,"N"],[4,3,"N"],[0,3,"NTL"],[0,3,"N"],[0,2,"N"],[5,2,"F"]],
   // 11 — SLALOM: nothing but blocks and pads, back to back.
@@ -466,14 +469,19 @@ function bevel(){
 // the same share one path. No canvases anywhere.
 const roadCache=new Map();
 function roadPaths(tile){
-  const key=tile.entry+'_'+tile.exit+(tile.isNarrow?'N':'')+(tile.isObs?'O':'')+(tile.isBoost?'T'+tile.boostSide:'')+
+  const armSig=(tile.arms||[{entry:tile.entry,exit:tile.exit}]).map(a=>a.entry+'>'+a.exit).join(',');
+  const key=armSig+(tile.isNarrow?'N':'')+(tile.isObs?'O':'')+(tile.isBoost?'T'+tile.boostSide:'')+
     (tile.isCross?'X'+tile.entry2+'_'+tile.exit2:'');
   let m=roadCache.get(key);
   if(m)return m;
   const bz=localBezier(tile.entry,tile.exit);
   const main=new Path2D();
-  main.moveTo(bz.p0.x,bz.p0.y);
-  main.bezierCurveTo(bz.cp1.x,bz.cp1.y,bz.cp2.x,bz.cp2.y,bz.p3.x,bz.p3.y);
+  // every arm of the tile, so a fork shows both roads leaving the junction
+  for(const a of (tile.arms||[{entry:tile.entry,exit:tile.exit}])){
+    const b=localBezier(a.entry,a.exit);
+    main.moveTo(b.p0.x,b.p0.y);
+    main.bezierCurveTo(b.cp1.x,b.cp1.y,b.cp2.x,b.cp2.y,b.p3.x,b.p3.y);
+  }
   let arms=null;
   if(tile.isCross&&tile.entry2>=0){
     arms=new Path2D();
@@ -491,20 +499,80 @@ function buildTrack(){
   trackTiles=[];
   let cx=0,cy=0;
   const centerMap=new Set(),crossMap=new Set();
-  for(let i=0;i<SEQ.length;i++){
-    const s=SEQ[i];
-    const cKey=keyOf(cx,cy);
+  const OPP=e=>(e+3)%6;
+  function push(px,py,arms,s,extra){
+    const cKey=keyOf(px,py);
     let skipRender=false;
     if(crossMap.has(cKey))skipRender=true;
-    if(s.isCross)crossMap.add(cKey);
-    trackTiles.push({idx:i,cx:cx,cy:cy,entry:s.entry,exit:s.exit,
+    if(s&&s.isCross)crossMap.add(cKey);
+    const t=Object.assign({idx:trackTiles.length,cx:px,cy:py,
+      entry:arms[0].entry,exit:arms[0].exit,arms:arms,
+      isStart:false,isFinish:false,isNarrow:false,isCross:false,
+      isObs:false,obsN:0,obsSide:0,isBoost:false,boostSide:0,
+      isFork:false,isMerge:false,mandatory:true,
+      entry2:-1,exit2:-1,kind:TH.track,isDeco:false,
+      skipRender:skipRender,visited:false},extra||{});
+    trackTiles.push(t);
+    centerMap.add(cKey);
+    return t;
+  }
+  // Branch tiles are tagged with the same flag letters as a normal tile, so a
+  // fork can offer a narrow line against an open one, or a slalom against a
+  // clear run.
+  function branchFlags(str){
+    const f=str||'';
+    const o={mandatory:false};
+    if(f.indexOf('N')>=0)o.isNarrow=true;
+    if(f.indexOf('O')>=0){o.isObs=true;o.obsN=2;o.obsSide=0;}
+    if(f.indexOf('T')>=0){o.isBoost=true;o.boostSide=(f.indexOf('L')>=0?-1:1);}
+    return o;
+  }
+  for(let i=0;i<SEQ.length;i++){
+    const s=SEQ[i];
+    if(s.isFork){
+      // A Y: one entry, two exits, two equal-length branches, then a merge.
+      // Both routes cover exactly the same ground, so either is a fair lap.
+      const e1=OPP(s.entry);                 // straight on
+      const e2=(e1+s.forkDir+6)%6;           // 60 degrees across
+      const A=neighborCenter(cx,cy,e1);
+      const B=neighborCenter(cx,cy,e2);
+      const M=neighborCenter(A.x,A.y,e2);    // the same cell as B across e1
+      push(cx,cy,[{entry:s.entry,exit:e1},{entry:s.entry,exit:e2}],s,
+        {isFork:true,isStart:s.isStart});
+      push(A.x,A.y,[{entry:OPP(e1),exit:e2}],null,branchFlags(s.forkLeft));
+      push(B.x,B.y,[{entry:OPP(e2),exit:e1}],null,branchFlags(s.forkRight));
+      push(M.x,M.y,[{entry:OPP(e2),exit:e1},{entry:OPP(e1),exit:e1}],null,
+        {isMerge:true});
+      const nc=neighborCenter(M.x,M.y,e1);cx=nc.x;cy=nc.y;
+      continue;
+    }
+    push(cx,cy,[{entry:s.entry,exit:s.exit}],s,{
       isStart:s.isStart,isFinish:s.isFinish,isNarrow:s.isNarrow,isCross:s.isCross,
       isObs:s.isObs,obsN:s.obsN,obsSide:s.obsSide,
       isBoost:s.isBoost,boostSide:s.boostSide,
-      entry2:s.entry2,exit2:s.exit2,kind:TH.track,isDeco:false,
-      skipRender:skipRender,visited:false});
-    centerMap.add(cKey);
+      entry2:s.entry2,exit2:s.exit2});
     const nc=neighborCenter(cx,cy,s.exit);cx=nc.x;cy=nc.y;
+  }
+  // who connects to whom, so the physics can tell which tile the car is on
+  // even where the circuit branches or crosses itself
+  {
+    const byPos=new Map();
+    for(const t of trackTiles){
+      const k=keyOf(t.cx,t.cy);
+      if(!byPos.has(k))byPos.set(k,[]);
+      byPos.get(k).push(t);
+    }
+    for(const t of trackTiles)t.links=new Set();
+    for(const t of trackTiles){
+      for(const a of t.arms){
+        const nc=neighborCenter(t.cx,t.cy,a.exit);
+        for(const o of (byPos.get(keyOf(nc.x,nc.y))||[])){
+          t.links.add(o.idx);o.links.add(t.idx);
+        }
+      }
+      for(const o of (byPos.get(keyOf(t.cx,t.cy))||[]))
+        if(o!==t){t.links.add(o.idx);o.links.add(t.idx);}
+    }
   }
   // city blocks either side of the circuit, then the harbour beyond them
   const LAND=TH.terr;
@@ -556,11 +624,47 @@ function buildTrack(){
   buildFabric(lcg(1337+currentLevelIdx*7919));
 }
 
+
+// The default way round: follow the arms, taking the first exit at a fork.
+// Used for the spine the city is built along and to pace the rivals.
+function canonicalPath(){
+  const byPos=new Map();
+  for(const t of trackTiles){
+    const k=keyOf(t.cx,t.cy);
+    if(!byPos.has(k))byPos.set(k,[]);
+    byPos.get(k).push(t);
+  }
+  const out=[],seen=new Set();
+  let t=trackTiles[0];
+  let entry=t.arms[0].entry;
+  while(t&&out.length<400){
+    const arm=t.arms.find(a=>a.entry===entry)||t.arms[0];
+    const k=t.idx+'|'+arm.exit;
+    if(seen.has(k))break;
+    seen.add(k);
+    out.push({tile:t,arm:arm});
+    if(t.isFinish)break;
+    const nc=neighborCenter(t.cx,t.cy,arm.exit);
+    const cands=byPos.get(keyOf(nc.x,nc.y))||[];
+    const want=(arm.exit+3)%6;
+    let nt=cands.find(o=>o.arms.some(a=>a.entry===want))||cands[0];
+    if(!nt)break;
+    entry=want;
+    t=nt;
+  }
+  return out;
+}
+function armBez(t,a){
+  const p0=edgeMid(t.cx,t.cy,a.entry),p3=edgeMid(t.cx,t.cy,a.exit);
+  return {p0:p0,cp1:{x:t.cx*0.5+p0.x*0.5,y:t.cy*0.5+p0.y*0.5},
+          cp2:{x:t.cx*0.5+p3.x*0.5,y:t.cy*0.5+p3.y*0.5},p3:p3};
+}
+
 // The circuit as one long polyline, used to line the route with buildings.
 function buildSpine(){
   spine=[];
-  for(const t of trackTiles){
-    const bz=worldBezier(t);
+  for(const step of canonicalPath()){
+    const bz=armBez(step.tile,step.arm);
     const from=spine.length?1:0;
     for(let i=from;i<=26;i++){
       const p=bezPt(i/26,bz.p0,bz.cp1,bz.cp2,bz.p3);
@@ -618,8 +722,37 @@ function distToRoadCenter2(px,py,t){
   return Math.min(distToSegment(px,py,a.x,a.y,t.cx,t.cy),
                   distToSegment(px,py,b.x,b.y,t.cx,t.cy));
 }
+// A tile can carry more than one road arm: a fork shares an entry between two
+// exits, a merge shares an exit between two entries. Distance is the minimum
+// over all of them, so the whole junction counts as road.
+function distToRoadCenterArms(px,py,t){
+  let pts=t._arm;
+  if(!pts){
+    pts=[];
+    for(const a of t.arms){
+      const p0=edgeMid(t.cx,t.cy,a.entry),p3=edgeMid(t.cx,t.cy,a.exit);
+      const bz={p0:p0,cp1:{x:t.cx*0.5+p0.x*0.5,y:t.cy*0.5+p0.y*0.5},
+                      cp2:{x:t.cx*0.5+p3.x*0.5,y:t.cy*0.5+p3.y*0.5},p3:p3};
+      const f=new Float64Array(82);
+      for(let i=0;i<=40;i++){
+        const q=bezPt(i/40,bz.p0,bz.cp1,bz.cp2,bz.p3);
+        f[i*2]=q.x;f[i*2+1]=q.y;
+      }
+      pts.push(f);
+    }
+    t._arm=pts;
+  }
+  let best=Infinity;
+  for(const f of pts)for(let i=0;i<82;i+=2){
+    const dx=px-f[i],dy=py-f[i+1];
+    const d=dx*dx+dy*dy;
+    if(d<best)best=d;
+  }
+  return Math.sqrt(best);
+}
 function distToRoadCenter(px,py,t){
   if(t.isDeco)return Infinity;
+  if(t.arms&&t.arms.length>1)return distToRoadCenterArms(px,py,t);
   if(t.isCross){
     const a=edgeMid(t.cx,t.cy,t.entry),b=edgeMid(t.cx,t.cy,t.exit);
     return Math.min(distToSegment(px,py,a.x,a.y,t.cx,t.cy),
@@ -968,14 +1101,11 @@ let oppLine=null,oppPoses=[],oppActive=null;
 function buildOpponentLine(){
   const xs=[],ys=[];
   if(!trackTiles.length){oppLine=null;return;}
-  const last=trackTiles.length-1;
-  {
-    const bz=worldBezier(trackTiles[0]);
-    for(let i=20;i<=40;i++){const p=bezPt(i/40,bz.p0,bz.cp1,bz.cp2,bz.p3);xs.push(p.x);ys.push(p.y);}
-  }
-  for(let t=1;t<last;t++){
-    const bz=worldBezier(trackTiles[t]);
-    for(let i=1;i<=40;i++){const p=bezPt(i/40,bz.p0,bz.cp1,bz.cp2,bz.p3);xs.push(p.x);ys.push(p.y);}
+  const path=canonicalPath();
+  for(let k=0;k<path.length-1;k++){
+    const bz=armBez(path[k].tile,path[k].arm);
+    const from=k===0?20:1;
+    for(let i=from;i<=40;i++){const p=bezPt(i/40,bz.p0,bz.cp1,bz.cp2,bz.p3);xs.push(p.x);ys.push(p.y);}
   }
   const n=xs.length,cum=new Float64Array(n);
   for(let i=1;i<n;i++)cum[i]=cum[i-1]+Math.hypot(xs[i]-xs[i-1],ys[i]-ys[i-1]);
@@ -1203,14 +1333,21 @@ function update(ts){
     physIdx=candidates[0];
     let tCand=candidates.filter(c=>!allTiles[c].isDeco);
     if(tCand.length>0){
+      // The circuit branches and can cross itself, so "next by index" is not
+      // meaningful. Keep only the tile we are on and the ones it actually
+      // connects to.
       const cur=car.trackIdx;
-      tCand=tCand.filter(c=>{const ti=allTiles[c].idx;return ti===cur||ti===cur+1||ti===cur-1;});
+      const curT=trackTiles[cur];
+      const linked=tCand.filter(c=>{
+        const ti=allTiles[c].idx;
+        return ti===cur||(curT&&curT.links&&curT.links.has(ti));
+      });
+      if(linked.length>0)tCand=linked;
       if(tCand.length>0){
         let minRD=Infinity;
         for(const c of tCand){
           let rd=distToRoadCenter(car.x,car.y,allTiles[c]);
           if(allTiles[c].idx===cur)rd-=100;
-          if(allTiles[c].idx===(cur+1)%trackTiles.length)rd-=50;
           if(rd<minRD){minRD=rd;physIdx=c;}
         }
         car.trackIdx=allTiles[physIdx].idx;
@@ -1332,7 +1469,8 @@ function update(ts){
 
   if(!finished){
     const lastT=trackTiles[trackTiles.length-1];
-    if(Math.hypot(car.x-lastT.cx,car.y-lastT.cy)<APOTHEM&&trackTiles.every(t=>t.visited)){
+    // Branch tiles are optional, so whichever way you went round counts.
+    if(Math.hypot(car.x-lastT.cx,car.y-lastT.cy)<APOTHEM&&trackTiles.every(t=>t.visited||t.mandatory===false)){
       finished=true;
       if(!isTuned()&&(!savedRecords[currentLevelIdx]||raceTime<savedRecords[currentLevelIdx])){
         savedRecords[currentLevelIdx]=raceTime;saveRecords();isNewRecord=true;
@@ -2037,8 +2175,12 @@ function mkSeq(tiles){
       isStart:f.indexOf('S')>=0,isFinish:f.indexOf('F')>=0,
       isNarrow:f.indexOf('N')>=0,isCross:f.indexOf('X')>=0,
       isObs:isObs,isBoost:isBoost,
+      isFork:f.indexOf('Y')>=0,
+      forkDir:(f.indexOf('Y')>=0)?((t[3]===undefined?1:t[3])<0?-1:1):0,
+      forkLeft:(f.indexOf('Y')>=0)?(t[4]||''):'',
+      forkRight:(f.indexOf('Y')>=0)?(t[5]||''):'',
       boostSide:isBoost?(f.indexOf('L')>=0?-1:1):0,
-      obsN:isObs?(t[3]===undefined?2:t[3]):0,
+      obsN:(isObs&&f.indexOf('Y')<0)?(t[3]===undefined?2:t[3]):0,
       obsSide:isObs?(t[4]===undefined?0:t[4]):0,
       // an obstacle tile reuses those two slots, so it has no crossing arms
       entry2:(isObs||t[3]===undefined)?-1:t[3],
