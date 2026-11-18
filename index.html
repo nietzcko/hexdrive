@@ -47,7 +47,7 @@ body { background:#070a11; overflow:hidden; width:100vw; height:100vh; font-fami
 
 <div id="fl"></div>
 
-<div id="btnRetry" class="icon-btn" onclick="loadLevel(currentLevelIdx)" style="position:fixed;top:14px;left:16px;z-index:20;display:none;">&#10227;</div>
+<div id="btnRetry" class="icon-btn" onclick="isDaily()?loadDaily(dailyDate):loadLevel(currentLevelIdx)" style="position:fixed;top:14px;left:16px;z-index:20;display:none;">&#10227;</div>
 <div id="btnMenu" class="icon-btn" onclick="initMenu()" style="position:fixed;top:14px;right:16px;z-index:20;display:none;">&#9776;</div>
 <div id="btnTune" class="icon-btn" onclick="openTune()" style="position:fixed;top:14px;right:74px;z-index:20;display:none;font-size:22px;">&#9881;</div>
 <div id="tuneBadge" style="position:fixed;top:70px;right:16px;z-index:20;display:none;background:rgba(200,120,0,0.85);color:#fff;font-size:11px;letter-spacing:1px;padding:4px 10px;border-radius:12px;pointer-events:none;">TUNED &middot; NO RECORDS</div>
@@ -154,7 +154,7 @@ const getStarTimes=idx=>{
   return rawStarTimes(idx).slice().sort((a,b)=>b-a);
 };
 const calcStars=(idx,time)=>{
-  if(!time)return 0;
+  if(!time||idx===-1)return 0;      // the daily is raced against yourself
   const [t1,t2,t3]=getStarTimes(idx);
   if(time<=t3)return 3;
   if(time<=t2)return 2;
@@ -258,6 +258,113 @@ const LEVEL_DATA=[
   // 11 — SLALOM: nothing but blocks and pads, back to back.
   [[3,0,"S"],[3,0,"TR"],[3,0,"O",2],[3,0,"O",1,0],[3,0,"O",1,-1],[3,0,"TL"],[3,0,"OTL",2],[3,0],[3,0,"O",1,1],[3,0,"TR"],[3,0,"O",2],[3,0,"F"]]
 ];
+
+
+// ── THE DAILY ────────────────────────────────────────
+// One circuit per calendar day, built from the date alone. Everyone driving on
+// the same day gets the same track, and it is rebuilt rather than stored, so a
+// day you finished can always be replayed exactly as it was.
+function localDate(d){
+  const t=d||new Date();
+  return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+}
+function hashDate(str){
+  let h=2166136261;
+  for(let i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=Math.imul(h,16777619); }
+  return h>>>0;
+}
+function dayLabel(ds){
+  const [y,m,d]=ds.split('-').map(Number);
+  const dt=new Date(y,m-1,d);
+  const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const DAY=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  return DAY[dt.getDay()]+' '+d+' '+MON[m-1];
+}
+// Build the day's tile list. Deterministic, and it retries until it finds a
+// layout that never crosses itself, so no date can produce a broken circuit.
+function dailyTiles(ds){
+  const rnd=lcg(hashDate(ds));
+  const OPPE=e=>(e+3)%6;
+  for(let attempt=0;attempt<60;attempt++){
+    const used=new Set(),tiles=[];
+    let cx=0,cy=0,entry=3,forks=0;
+    const want=15+Math.floor(rnd()*7);
+    const maxForks=1+Math.floor(rnd()*2);
+    let ok=true;
+    used.add(keyOf(cx,cy));
+    while(tiles.length<want){
+      const straight=OPPE(entry);
+      // a Y now and then, but only where all of its cells are still free
+      if(forks<maxForks&&tiles.length>2&&tiles.length<want-3&&rnd()<0.22){
+        const dir=rnd()<0.5?1:-1;
+        const e1=straight,e2=(e1+dir+6)%6;
+        const A=neighborCenter(cx,cy,e1);
+        const M=neighborCenter(A.x,A.y,e2);
+        const B=neighborCenter(cx,cy,e2);
+        const after=neighborCenter(M.x,M.y,e1);
+        const need=[keyOf(A.x,A.y),keyOf(B.x,B.y),keyOf(M.x,M.y),keyOf(after.x,after.y)];
+        if(new Set(need).size===4&&need.every(k=>!used.has(k))){
+          tiles.push([entry,e1,'Y',dir,'O',dir<0?'NTL':'NTR']);
+          need.slice(0,3).forEach(k=>used.add(k));
+          cx=after.x;cy=after.y;entry=OPPE(e1);
+          used.add(keyOf(cx,cy));
+          forks++;
+          continue;
+        }
+      }
+      // gentle turns are far likelier than sharp ones, and never a reversal
+      const pool=[0,0,0,0,0,1,1,1,-1,-1,-1,2,-2];
+      let placed=false;
+      for(let tries=0;tries<14&&!placed;tries++){
+        const exit=(straight+pool[Math.floor(rnd()*pool.length)]+6)%6;
+        const n=neighborCenter(cx,cy,exit);
+        if(used.has(keyOf(n.x,n.y)))continue;
+        tiles.push([entry,exit]);
+        cx=n.x;cy=n.y;entry=OPPE(exit);
+        used.add(keyOf(cx,cy));
+        placed=true;
+      }
+      if(!placed){ok=false;break;}
+    }
+    if(!ok||tiles.length<10)continue;
+    tiles[0][2]='S';
+    const last=tiles[tiles.length-1];
+    if(typeof last[2]==='string'&&last[2].indexOf('Y')>=0){
+      const n=neighborCenter(cx,cy,OPPE(entry));
+      if(used.has(keyOf(n.x,n.y)))continue;
+      tiles.push([entry,OPPE(entry),'F']);
+    }else last[2]='F';
+    // scatter the furniture over the middle of the lap
+    for(let i=1;i<tiles.length-1;i++){
+      const t=tiles[i];
+      if(typeof t[2]==='string'&&t[2])continue;
+      const isStraight=t[1]===OPPE(t[0]);
+      // One draw decides the tile, so the same band means the same thing on a
+      // straight and on a turn. Turns were getting a pad far too often when the
+      // obstacle band fell through to them.
+      const r=rnd();
+      if(isStraight&&r<0.20){
+        t[2]='O';t[3]=rnd()<0.5?2:1;
+        if(t[3]===1)t[4]=[-1,0,1][Math.floor(rnd()*3)];
+      }else if(r>=0.20&&r<0.40)t[2]=rnd()<0.5?'TR':'TL';   // a pad on a fifth of tiles
+      else if(r>=0.40&&r<0.50)t[2]='N';                     // a narrow lane on a tenth
+    }
+    return tiles;
+  }
+  return null;
+}
+const DAILY_IDX=-1;                 // the daily sits outside the numbered circuits
+let dailyDate=localDate();          // which day is loaded
+const DAILY_THEMES=['meadow','pine','town','desert','city','snow'];
+function dailyTheme(ds){ return DAILY_THEMES[hashDate(ds)%DAILY_THEMES.length]; }
+// Records and ghosts for every day you have driven, kept by date.
+let dailyRec={};
+try{ const r=localStorage.getItem('hexDriveDaily_v1'); if(r)dailyRec=JSON.parse(r); }catch(e){}
+function saveDaily(){ try{ localStorage.setItem('hexDriveDaily_v1',JSON.stringify(dailyRec)); }catch(e){} }
+function dailyBest(ds){ const d=dailyRec[ds]; return d?d.t:null; }
+function dailyGhost(ds){ const d=dailyRec[ds]; return d&&d.g?d.g:null; }
+function dailyDays(){ return Object.keys(dailyRec).sort().reverse(); }
+function isDaily(){ return currentLevelIdx===DAILY_IDX; }
 
 // ── RECORDS AND GHOSTS ───────────────────────────────
 let savedRecords=Array(LEVEL_DATA.length).fill(null);
@@ -390,7 +497,13 @@ function obstaclesFor(tile,cx,cy){
 
 const CIRCUIT_NAMES=['PROVING GROUND','MEADOW MILE','PINE HOLLOW','OLD TOWN','DUST BOWL','CROSSTOWN',
   'GLACIER PASS','HEDGE LANES','GRAND CENTRAL','FROZEN HARBOUR','THE LONG TOUR','SLALOM'];
-function theme(){ return THEMES[LEVEL_THEME[currentLevelIdx]||'meadow']; }
+function theme(){
+  if(isDaily())return THEMES[dailyTheme(dailyDate)]||THEMES.meadow;
+  return THEMES[LEVEL_THEME[currentLevelIdx]||'meadow'];
+}
+function circuitName(){
+  return isDaily()?('DAILY \u00b7 '+dayLabel(dailyDate)):(CIRCUIT_NAMES[currentLevelIdx]||'CIRCUIT');
+}
 
 const RIM_LIGHT='rgba(242,224,172,0.5)';
 const RIM_DARK='rgba(40,29,16,0.85)';
@@ -651,7 +764,7 @@ function buildTrack(){
   }
   mapCx=(minX+maxX)/2;mapCy=(minY+maxY)/2;
   mapRad=Math.max(maxX-minX,maxY-minY)/2+APOTHEM;
-  buildFabric(lcg(1337+currentLevelIdx*7919));
+  buildFabric(lcg(isDaily()?hashDate(dailyDate):(1337+currentLevelIdx*7919)));
 }
 
 
@@ -1233,6 +1346,7 @@ function oppPoseAt(frac){
           angle:Math.atan2(L.ys[i2]-L.ys[i1],L.xs[i2]-L.xs[i1]),done:false};
 }
 function pickOpponent(){
+  if(isDaily()){oppActive=null;return;}        // the daily is you against your ghost
   const stars=calcStars(currentLevelIdx,savedRecords[currentLevelIdx]);
   if(stars>=3){oppActive=null;return;}
   const wantTier=stars+1;
@@ -1397,13 +1511,15 @@ document.addEventListener('keydown',e=>{
   if(e.code==='Space'){e.preventDefault();if(!toggleHeld){toggleHeld=true;syncLean();}}
   if(e.code==='Backspace'||e.key.toLowerCase()==='r'){
     e.preventDefault();
-    if(state==='racing'||state==='finish')loadLevel(currentLevelIdx);
+    if(state==='racing'||state==='finish'){ if(isDaily())loadDaily(dailyDate); else loadLevel(currentLevelIdx); }
   }
 });
 document.addEventListener('keyup',e=>{
   if(e.code==='Space'){e.preventDefault();toggleHeld=false;toggleDir*=-1;syncLean();}
 });
 
+function recordFor(){ return isDaily()?dailyBest(dailyDate):savedRecords[currentLevelIdx]; }
+function ghostFor(){ return isDaily()?dailyGhost(dailyDate):savedGhosts[currentLevelIdx]; }
 function resetGame(){
   if(builtLevel!==currentLevelIdx){ buildTrack(); builtLevel=currentLevelIdx; }
   trackTiles.forEach(t=>t.visited=false);
@@ -1419,7 +1535,7 @@ function resetGame(){
   ghostRec=[];
   pickOpponent();
   oppPoses=[];
-  ghostPlay=savedGhosts[currentLevelIdx]||null;
+  ghostPlay=ghostFor()||null;
   ghostPose=ghostPlay&&ghostPlay.length>=3?{x:ghostPlay[0],y:ghostPlay[1],angle:ghostPlay[2],done:false}:null;
   raceStart=0;raceTime=0;finished=false;isNewRecord=false;
   _hudLast='';updHUD();
@@ -1646,7 +1762,7 @@ function update(ts){
     // Branch tiles are optional, so whichever way you went round counts.
     if(Math.hypot(car.x-lastT.cx,car.y-lastT.cy)<APOTHEM&&trackTiles.every(t=>t.visited||t.mandatory===false)){
       finished=true;
-      if(!isTuned()&&(!savedRecords[currentLevelIdx]||raceTime<savedRecords[currentLevelIdx])){
+      if(!isDaily()&&!isTuned()&&(!savedRecords[currentLevelIdx]||raceTime<savedRecords[currentLevelIdx])){
         savedRecords[currentLevelIdx]=raceTime;saveRecords();isNewRecord=true;
         ghostRecord();
         savedGhosts[currentLevelIdx]=ghostRec.slice();
@@ -1654,6 +1770,13 @@ function update(ts){
       }
       ghostRecord();
       lastLap={t:Math.round(raceTime),d:ghostRec.slice()};
+      if(isDaily()&&!isTuned()){
+        const prev=dailyBest(dailyDate);
+        if(prev===null||prev===undefined||raceTime<prev){
+          dailyRec[dailyDate]={t:Math.round(raceTime),g:ghostRec.slice()};
+          saveDaily();isNewRecord=true;
+        }
+      }
       doFlash(isNewRecord?'NEW RECORD':'FINISH','#ffd23f');
       setTimeout(showFinish,600);
     }
@@ -1671,7 +1794,7 @@ function update(ts){
 // ── DRAWING ──────────────────────────────────────────
 function drawBackground(){
   const bg=ctx.createLinearGradient(0,0,0,cv.height);
-  const sk=(state==='menu'||!LEVEL_THEME[currentLevelIdx])?THEMES.meadow.sky:theme().sky;
+  const sk=(state==='menu'&&!isDaily())?THEMES.meadow.sky:theme().sky;
   bg.addColorStop(0,sk[0]);
   bg.addColorStop(0.55,sk[1]);
   bg.addColorStop(1,sk[2]);
@@ -2122,7 +2245,8 @@ function drawCarBody(bodyCol,accentCol,isGhost,braking){
   ctx.fillRect(W*0.3,L*0.55,W*0.9,5);
   ctx.fillStyle='#fff';ctx.font=`bold ${CAR_W*0.9}px Courier New`;
   ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.save();ctx.translate(0,L*0.25);ctx.fillText(String(currentLevelIdx+1),0,0);ctx.restore();
+  ctx.save();ctx.translate(0,L*0.25);
+  ctx.fillText(isDaily()?'\u2605':String(currentLevelIdx+1),0,0);ctx.restore();
 }
 function drawWheels(x,y,ang,steer,ghost){
   const dx=Math.cos(ang+Math.PI/2),dy=Math.sin(ang+Math.PI/2);
@@ -2270,22 +2394,27 @@ function showFinish(){
   const [t1,t2,t3]=getStarTimes(currentLevelIdx);
   const next=stars===0?t1:stars===1?t2:stars===2?t3:null;
   let nextBtn='';
-  if(currentLevelIdx+1<LEVEL_DATA.length&&(stars>=1||currentLevelIdx===0||devMode))
+  if(isDaily()){}
+  else if(currentLevelIdx+1<LEVEL_DATA.length&&(stars>=1||currentLevelIdx===0||devMode))
     nextBtn=`<button class="ob" onclick="loadLevel(${currentLevelIdx+1})">Next circuit</button>`;
   ov.innerHTML=`
     <h1 style="font-size:clamp(26px,7vw,46px);color:#fff;letter-spacing:3px;">${isNewRecord?'New record':'Lap complete'}</h1>
-    <div style="font-size:12px;color:#93a6ba;letter-spacing:3px;margin-top:4px;">${CIRCUIT_NAMES[currentLevelIdx]||''}</div>
-    ${currentLevelIdx===0?'<div style="font-size:12px;color:#7fe0ff;letter-spacing:3px;margin:10px 0;">PRACTICE RUN</div>'
+    <div style="font-size:12px;color:#93a6ba;letter-spacing:3px;margin-top:4px;">${circuitName()}</div>
+    ${isDaily()
+      ?`<div style="font-size:12px;color:#7fe0ff;letter-spacing:3px;margin:10px 0;">DAILY CIRCUIT</div>`
+      :currentLevelIdx===0?'<div style="font-size:12px;color:#7fe0ff;letter-spacing:3px;margin:10px 0;">PRACTICE RUN</div>'
       :`<div style="margin:14px 0;">${starRow(stars,40)}</div>`}
     <div style="font-size:46px;color:#dff1ff;">${fmt(raceTime)}</div>
-    ${next?`<div style="font-size:14px;color:#9fb8cc;margin:10px 0 20px;">${fmt(next)} for the next star</div>`
+    ${isDaily()
+      ?`<div style="font-size:14px;color:#9fb8cc;margin:10px 0 20px;">best today ${fmt(dailyBest(dailyDate))}</div>`
+      :next?`<div style="font-size:14px;color:#9fb8cc;margin:10px 0 20px;">${fmt(next)} for the next star</div>`
           :`<div style="font-size:14px;color:#7fffa8;margin:10px 0 20px;">All three stars</div>`}
     <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;">
-      <button class="ob" onclick="loadLevel(${currentLevelIdx})">Retry</button>
+      <button class="ob" onclick="${isDaily()?`loadDaily('${dailyDate}')`:`loadLevel(${currentLevelIdx})`}">Retry</button>
       ${nextBtn}
       <button class="ob" onclick="initMenu()">Circuits</button>
     </div>
-    ${devMode?devSaveBlock():''}`;
+    ${(devMode&&!isDaily())?devSaveBlock():''}`;
   ov.style.display='flex';
 }
 
@@ -2341,6 +2470,46 @@ function initMenu(){
   cam={x:mapCx,y:mapCy,angle:0.5,zoom:0.075};
   state='menu';
   const grid=document.getElementById('lvlGrid');grid.innerHTML='';
+  // today's circuit, then the days you have already driven
+  {
+    const today=localDate();
+    const best=dailyBest(today);
+    const d=document.createElement('div');
+    d.className='lvlBtn';
+    d.style.borderLeftColor='#7fe0ff';
+    d.innerHTML=`<div class="lvlNo" style="color:#7fe0ff;">&#9733;</div><div class="lvlBody">
+      <div class="ln">TODAY'S CIRCUIT</div>
+      <div class="lt" style="color:#7fe0ff;margin:3px 0 2px;">${dayLabel(today)} &middot; built from the date</div>
+      <div class="lt">${best?('best '+fmt(best)):'not driven yet'}</div>
+      <div class="lt" style="color:#71839a;font-size:11px;">a new circuit every day &middot; race your own ghost</div>
+    </div>`;
+    d.onclick=()=>loadDaily(today);
+    grid.appendChild(d);
+
+    const past=dailyDays().filter(x=>x!==today);
+    if(past.length){
+      const h=document.createElement('div');
+      h.style.cssText='font-size:11px;letter-spacing:3px;color:#71839a;margin:14px 0 2px;padding-left:4px;';
+      h.textContent='PREVIOUS DAYS';
+      grid.appendChild(h);
+      for(const ds of past.slice(0,30)){
+        const r=document.createElement('div');
+        r.className='lvlBtn';
+        r.style.cssText='padding:10px 16px;border-left-color:#3a4a68;';
+        r.innerHTML=`<div class="lvlNo" style="font-size:16px;color:#5f7389;"></div><div class="lvlBody"
+          style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+          <div class="lt" style="color:#dff1ff;">${dayLabel(ds)}</div>
+          <div class="lt" style="color:#7fe0ff;font-variant-numeric:tabular-nums;">${fmt(dailyBest(ds))}</div>
+        </div>`;
+        r.onclick=()=>loadDaily(ds);
+        grid.appendChild(r);
+      }
+      const h2=document.createElement('div');
+      h2.style.cssText='font-size:11px;letter-spacing:3px;color:#71839a;margin:16px 0 2px;padding-left:4px;';
+      h2.textContent='CIRCUITS';
+      grid.appendChild(h2);
+    }
+  }
   // The proving ground is always open and never gates the next circuit, so the
   // chain of stars starts at Meadow Mile.
   let unlocked=true;
@@ -2398,10 +2567,18 @@ function mkSeq(tiles){
   });
 }
 
+function loadDaily(ds){
+  dailyDate=ds||localDate();
+  builtLevel=-999;                  // force a rebuild: the layout changed
+  loadLevel(DAILY_IDX);
+}
 function loadLevel(idx){
   const changed=idx!==currentLevelIdx;
   currentLevelIdx=idx;
-  SEQ=mkSeq(LEVEL_DATA[idx]);
+  if(idx===DAILY_IDX){
+    const t=dailyTiles(dailyDate);
+    SEQ=mkSeq(t||LEVEL_DATA[1]);
+  }else SEQ=mkSeq(LEVEL_DATA[idx]);
   if(changed||builtLevel!==idx){ roadCache.clear(); buildTrack(); builtLevel=idx; }
   document.getElementById('lvlSel').style.display='none';
   document.getElementById('finishMenu').style.display='none';
@@ -2412,7 +2589,7 @@ function loadLevel(idx){
   document.getElementById('btnMenu').style.display='flex';
   document.getElementById('btnTune').style.display='flex';
   syncTuneBadge();
-  document.getElementById('hPR').textContent='PR '+fmt(savedRecords[idx]);
+  document.getElementById('hPR').textContent='PR '+fmt(recordFor());
   resetGame();
   state='racing';
   lastTs=performance.now();
@@ -2664,12 +2841,13 @@ function clearPRs(){
     savedRecords=Array(LEVEL_DATA.length).fill(null);
     savedGhosts=Array(LEVEL_DATA.length).fill(null);
     ghostPlay=null;ghostPose=null;ghostRec=[];
-    paceRec={};starOverride={};lastLap=null;
+    paceRec={};starOverride={};lastLap=null;dailyRec={};
     try{
       localStorage.removeItem('hexDriveRecords_v4');
       localStorage.removeItem('hexDriveGhosts_v4');
       localStorage.removeItem('hexDrivePace_v1');
       localStorage.removeItem('hexDriveStars_v1');
+      localStorage.removeItem('hexDriveDaily_v1');
     }catch(e){}
     initMenu();
   }
